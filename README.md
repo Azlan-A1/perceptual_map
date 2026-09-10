@@ -87,3 +87,11 @@ numbers in `data/cars.csv`.
 `gt::gtcars` is an alternative real, citable dataset, but it is supercar-heavy
 (Ferrari, Lamborghini, Aston Martin, 2014–2017) with no Corolla or F-150, so it
 cannot show mainstream market spread.
+
+## License
+
+[MIT](LICENSE) © 2026 Azlan Ahmad
+
+The car specifications in `data/cars.csv` are hand-compiled approximations
+assembled for illustration, not licensed data from any manufacturer or
+third-party database.
