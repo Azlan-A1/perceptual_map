@@ -22,7 +22,7 @@ p <- compose_map(m, car_pt = 40, dev_in = DEV,
 
 dir.create("outputs", showWarnings = FALSE)
 ggsave("outputs/map.png", p, width = DEV[1], height = DEV[2], dpi = 200,
-       device = ragg::agg_png, limitsize = FALSE)
+       device = ragg::agg_png, limitsize = FALSE, bg = pm_bg(FALSE))
 # cairo_pdf gives proper UTF-8 text but needs XQuartz on macOS. capabilities()
 # can report TRUE while the DLL still fails to load at draw time, and that
 # failure is a WARNING, not an error -- so verify the file actually landed
@@ -31,7 +31,8 @@ save_pdf <- function(file, plot) {
   try_dev <- function(dev) {
     unlink(file)
     suppressWarnings(try(
-      ggsave(file, plot, width = DEV[1], height = DEV[2], device = dev, limitsize = FALSE),
+      ggsave(file, plot, width = DEV[1], height = DEV[2], device = dev,
+             limitsize = FALSE, bg = pm_bg(FALSE)),
       silent = TRUE))
     file.exists(file) && file.size(file) > 1000
   }
@@ -51,7 +52,7 @@ p_dark <- compose_map(m, car_pt = 40, dev_in = DEV, dark = TRUE,
                       quads = c(tr = "BIG & POWERFUL", tl = "SMALL & QUICK",
                                 bl = "VALUE & ECONOMY", br = "SIZE & UTILITY"))
 ggsave("outputs/map-dark.png", p_dark, width = DEV[1], height = DEV[2], dpi = 200,
-       device = ragg::agg_png, limitsize = FALSE)
+       device = ragg::agg_png, limitsize = FALSE, bg = pm_bg(TRUE))
 
 cat("\nWrote outputs/map.png, outputs/map.pdf, outputs/map-dark.png\n")
 if (interactive()) print(p)   # <- Plots pane

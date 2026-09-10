@@ -27,8 +27,12 @@ patchwork, scales, grid, ragg**. Nothing to install.
   Because silhouettes are sized in *points*, not data units, zooming genuinely
   spreads a crowded cluster apart instead of magnifying it.
 - **Click a car** for its spec card.
-- **Body types**, silhouette size, labels, quadrants, hulls, dark mode.
-- Tabs for variance explained, the loadings table, and the raw data.
+- **Body types**, silhouette size, labels, quadrants, hulls.
+- **Light / dark toggle** in the header. It themes the entire app — chrome,
+  cards, tables, both plots, and the downloaded PNG — not just the map.
+- Tabs for variance explained, the loadings table, the raw data, and
+  **How it works**, an in-app explanation of the whole pipeline that reports the
+  variance and axis names of whatever fit is currently on screen.
 - **Download PNG** exports the current view at 200 dpi.
 
 ## How the map is built
@@ -58,7 +62,8 @@ so **73.5%** of the variance is on the two axes you see.
 | `R/silhouettes.R` | Body-type polygon shapes, `car_grob()`, and the `GeomCar` ggplot2 geom. |
 | `R/pca.R` | `fit_map()`, transforms, sign pinning, `axis_name()`. |
 | `R/layout.R` | Axis limits, aspect fitting, label repel, inset corner picking. |
-| `R/plot.R` | `build_map()`, `build_compass()`, `compose_map()`, theming. |
+| `R/plot.R` | `build_map()`, `build_compass()`, `compose_map()`, `pm_bg()`, theming. |
+| `R/explain.R` | The How it works tab, generated from `CARS` / `ATTRS` so it cannot go stale. |
 | `app.R` | The Shiny app. |
 | `run_static.R` | Static export. |
 | `setup.R` | Package check. |

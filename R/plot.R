@@ -2,8 +2,12 @@
 # Plot construction: the map, the loadings compass, and the two composed.
 # ---------------------------------------------------------------------------
 
+#' The single source of truth for the two page backgrounds. Anything that fills
+#' a device or a label must use this, or light/dark drift apart.
+pm_bg <- function(dark = FALSE) if (dark) "#16181D" else "#FFFFFF"
+
 pm_theme <- function(dark = FALSE, base_size = 11) {
-  bg   <- if (dark) "#16181D" else "#FFFFFF"
+  bg   <- pm_bg(dark)
   fg   <- if (dark) "#E6E8EC" else "grey12"
   mid  <- if (dark) "#9AA0AA" else "grey35"
   grid <- if (dark) "#272A31" else "grey93"
@@ -101,7 +105,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     p <- p + ggplot2::geom_label(data = d, ggplot2::aes(lx, ly, label = model),
                                  size = 2.6, colour = fg, linewidth = 0,
                                  label.padding = grid::unit(1, "pt"),
-                                 fill = scales::alpha(if (dark) "#16181D" else "#FFFFFF", .80))
+                                 fill = scales::alpha(pm_bg(dark), .80))
 
   if (show_quadrants) {
     qs <- list(c(xlim[2], ylim[2], 1, 1.6, "tr"), c(xlim[1], ylim[2], 0, 1.6, "tl"),
@@ -138,7 +142,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
 build_compass <- function(m, xpc = "PC1", ypc = "PC2", dark = FALSE) {
   fg  <- if (dark) "#E6E8EC" else "grey20"
   mid <- if (dark) "#6B7280" else "grey85"
-  bg  <- if (dark) "#16181D" else "#FFFFFF"
+  bg  <- pm_bg(dark)
   L <- m$loadings
   L$x <- L[[xpc]]; L$y <- L[[ypc]]
   th <- seq(0, 2 * pi, length.out = 200)
@@ -207,7 +211,12 @@ compose_map <- function(m, xpc = "PC1", ypc = "PC2", ..., bodies = NULL,
   if (is.null(corner)) return(main)
 
   b <- inset_bounds(corner)
+  # patchwork paints its own backdrop from the GLOBAL theme (theme_grey, i.e.
+  # white) rather than from the plots it is composing, so a dark map ends up
+  # framed in white. Set it explicitly.
   main + patchwork::inset_element(build_compass(m, xpc = xpc, ypc = ypc, dark = dark),
                                   left = b[["left"]], bottom = b[["bottom"]],
-                                  right = b[["right"]], top = b[["top"]])
+                                  right = b[["right"]], top = b[["top"]]) +
+    patchwork::plot_annotation(theme = ggplot2::theme(
+      plot.background = ggplot2::element_rect(fill = pm_bg(dark), colour = NA)))
 }

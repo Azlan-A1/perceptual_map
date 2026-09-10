@@ -5,14 +5,18 @@ suppressPackageStartupMessages({
   library(shiny); library(bslib); library(ggplot2); library(grid)
   library(patchwork); library(scales); library(DT)
 })
-for (f in c("silhouettes", "pca", "layout", "plot")) source(file.path("R", paste0(f, ".R")))
+for (f in c("silhouettes", "pca", "layout", "plot", "explain")) source(file.path("R", paste0(f, ".R")))
 
 CARS <- read.csv("data/cars.csv", stringsAsFactors = FALSE)
 VAR_CHOICES <- stats::setNames(ATTRS$var, ATTRS$label)
 PC_CHOICES  <- paste0("PC", 1:4)
 
 ui <- page_sidebar(
-  title = "Car Perceptual Map",
+  title = tags$div(
+    class = "d-flex justify-content-between align-items-center w-100",
+    tags$span("Car Perceptual Map"),
+    input_dark_mode(id = "mode", mode = "light")
+  ),
   theme = bs_theme(version = 5, preset = "flatly"),
 
   sidebar = sidebar(
@@ -34,7 +38,6 @@ ui <- page_sidebar(
     checkboxInput("quads",    "Quadrant shading", TRUE),
     checkboxInput("compass",  "Loadings compass", TRUE),
     checkboxInput("hulls",    "Segment hulls",  FALSE),
-    checkboxInput("dark",     "Dark mode",      FALSE),
     hr(),
     actionButton("reset", "Reset zoom", class = "btn-sm btn-outline-secondary"),
     downloadButton("dl", "Download PNG", class = "btn-sm btn-primary")
@@ -69,13 +72,18 @@ ui <- page_sidebar(
     ),
     nav_panel("Variance", card_body(plotOutput("scree", height = "380px"))),
     nav_panel("Loadings", card_body(DTOutput("loadtab"), fillable = FALSE)),
-    nav_panel("Data",     card_body(DTOutput("datatab"), fillable = FALSE))
+    nav_panel("Data",     card_body(DTOutput("datatab"), fillable = FALSE)),
+    nav_panel("How it works", card_body(explain_ui(CARS, ATTRS), fillable = FALSE))
   )
 )
 
 server <- function(input, output, session) {
 
   rng <- reactiveValues(x = NULL, y = NULL)
+
+  # input_dark_mode reports "light"/"dark"; NULL for one beat before the client
+  # reports in, so default to light rather than letting the plot theme go NA.
+  dark <- reactive(identical(input$mode, "dark"))
 
   # ---- model ----------------------------------------------------------------
   md <- reactive({
@@ -123,12 +131,16 @@ server <- function(input, output, session) {
               car_pt = input$car_pt, dev_in = dev_in(),
               show_labels = input$labels, show_quadrants = input$quads,
               show_hulls = input$hulls, bodies = input$bodies,
-              xlim = xl, ylim = yl, dark = input$dark)
+              xlim = xl, ylim = yl, dark = dark())
   })
 
-  output$map <- renderPlot({ build() }, res = 96)
+  # coord_fixed() makes ggplot2 letterbox the gtable, so the DEVICE background is
+  # visible on either side of the plot. Transparent hands that strip to the card
+  # behind it, which is already the right colour in both themes.
+  output$map <- renderPlot({ build() }, res = 96, bg = "transparent")
 
-  output$compass <- renderPlot({ build_compass(md(), xpc(), ypc(), input$dark) }, res = 96)
+  output$compass <- renderPlot({ build_compass(md(), xpc(), ypc(), dark()) },
+                                res = 96, bg = "transparent")
 
   output$vx <- renderText({ m <- md(); sprintf("%.1f%%", m$ve[as.integer(sub("PC","",xpc()))]) })
   output$vy <- renderText({ m <- md(); sprintf("%.1f%%", m$ve[as.integer(sub("PC","",ypc()))]) })
@@ -162,34 +174,54 @@ server <- function(input, output, session) {
     )
   })
 
+  # ---- explainer, keyed to whatever is on screen right now -------------------
+  output$xp_live <- renderUI({
+    m <- md(); vx <- m$ve[as.integer(sub("PC", "", xpc()))]
+    vy <- m$ve[as.integer(sub("PC", "", ypc()))]
+    tags$div(class = "note",
+      tags$span(class = "h", "Your current fit:"), " ",
+      sprintf(paste0("%d attributes across %d cars. %s carries %.1f%% of the variance and reads as ",
+                     "“%s”; %s carries %.1f%% and reads as “%s”. That puts %.1f%% of ",
+                     "everything the specs contain on screen — the other %.1f%% sits in components ",
+                     "you are not currently looking at."),
+              length(m$vars), nrow(pdat()), xpc(), vx, axis_name(m$loadings, xpc()),
+              ypc(), vy, axis_name(m$loadings, ypc()), vx + vy, 100 - (vx + vy)))
+  })
+
   # ---- other tabs -----------------------------------------------------------
   output$scree <- renderPlot({
     m <- md()
     s <- data.frame(pc = factor(paste0("PC", seq_along(m$ve)), levels = paste0("PC", seq_along(m$ve))),
                     ve = m$ve)
     s$cum <- cumsum(s$ve)
+    ink <- if (dark()) "#C7CCD4" else "grey25"
+    cum_col <- if (dark()) "#9AA0AA" else "grey35"
     ggplot(s, aes(pc, ve)) +
       geom_col(fill = "#4C72B0", width = .65) +
-      geom_line(aes(x = as.integer(pc), y = cum), colour = "grey35", linewidth = .5) +
-      geom_point(aes(x = as.integer(pc), y = cum), colour = "grey25", size = 1.6) +
-      geom_text(aes(label = sprintf("%.1f%%", ve)), vjust = -0.5, size = 3.2, colour = "grey25") +
+      geom_line(aes(x = as.integer(pc), y = cum), colour = cum_col, linewidth = .5) +
+      geom_point(aes(x = as.integer(pc), y = cum), colour = ink, size = 1.6) +
+      geom_text(aes(label = sprintf("%.1f%%", ve)), vjust = -0.5, size = 3.2, colour = ink) +
       labs(title = "Variance explained by each component",
            subtitle = "Bars = individual, line = cumulative", x = NULL, y = "% of variance") +
-      pm_theme(input$dark)
-  }, res = 96)
+      pm_theme(dark())
+  }, res = 96, bg = "transparent")
 
   output$loadtab <- renderDT({
     m <- md()
     L <- m$loadings[, c("var", intersect(paste0("PC", 1:4), names(m$loadings)))]
     names(L)[1] <- "attribute"
     num <- setdiff(names(L), "attribute")
-    datatable(L, rownames = FALSE, options = list(dom = "t", pageLength = 20)) |>
+    cells <- if (dark()) c("#5C2B30", "transparent", "#22415F")
+             else          c("#F6D8D9", "transparent", "#D6E3F2")
+    datatable(L, rownames = FALSE, style = "bootstrap5", class = "table table-sm",
+              options = list(dom = "t", pageLength = 20)) |>
       formatRound(num, 2) |>
-      formatStyle(num, backgroundColor = styleInterval(c(-0.5, 0.5), c("#F6D8D9", "white", "#D6E3F2")))
+      formatStyle(num, backgroundColor = styleInterval(c(-0.5, 0.5), cells))
   })
 
   output$datatab <- renderDT({
     datatable(pdat()[, c("model","brand","body", ATTRS$var)], rownames = FALSE,
+              style = "bootstrap5", class = "table table-sm",
               options = list(pageLength = 15, scrollX = TRUE))
   })
 
@@ -197,8 +229,9 @@ server <- function(input, output, session) {
   output$dl <- downloadHandler(
     filename = function() sprintf("perceptual-map-%s-%s.png", xpc(), ypc()),
     content = function(file) {
+      # A downloaded file has no card behind it, so it needs a real fill.
       ggsave(file, build(), width = 12.5, height = 9.5, dpi = 200,
-             device = ragg::agg_png, limitsize = FALSE)
+             device = ragg::agg_png, limitsize = FALSE, bg = pm_bg(dark()))
     }
   )
 }
