@@ -1,0 +1,29 @@
+model,brand,body,price_k,hp,mpg,weight,seats,sec060,cargo,length
+Toyota Corolla,Toyota,sedan,23,169,35,3150,5,8.2,13.1,182
+Honda Civic,Honda,hatch,25,158,36,2900,5,8.0,24.5,184
+Mazda3,Mazda,hatch,25,191,31,3255,5,7.2,20.1,176
+Toyota Camry,Toyota,sedan,28,203,32,3310,5,7.6,15.1,193
+Honda Accord,Honda,sedan,29,192,32,3200,5,7.9,16.7,196
+Tesla Model 3,Tesla,sedan,40,283,132,3880,5,5.8,23.0,186
+Tesla Model Y,Tesla,suv,45,384,122,4400,5,4.8,34.0,187
+BMW 3 Series,BMW,sedan,45,255,30,3600,5,5.6,17.0,186
+Mercedes C-Class,Mercedes,sedan,48,255,28,3700,5,5.9,12.6,187
+Audi A4,Audi,sedan,42,201,28,3600,5,6.3,12.0,187
+Porsche 911,Porsche,sports,115,379,20,3350,4,4.0,4.6,178
+Chevy Corvette,Chevrolet,sports,70,495,19,3650,2,2.9,12.6,182
+Mazda MX-5,Mazda,sports,29,181,30,2350,2,5.7,4.6,154
+Ford Mustang,Ford,sports,32,315,25,3600,4,5.1,13.5,189
+Subaru WRX,Subaru,sedan,32,271,22,3320,5,5.4,12.5,184
+Toyota RAV4,Toyota,suv,29,203,30,3450,5,8.0,37.6,181
+Honda CR-V,Honda,suv,30,190,30,3450,5,7.9,39.3,185
+Subaru Outback,Subaru,suv,30,182,28,3650,5,8.7,32.6,191
+Jeep Wrangler,Jeep,suv,35,285,21,4200,5,6.5,31.7,189
+Ford F-150,Ford,truck,38,325,22,4700,5,6.3,52.0,232
+Ram 1500,Ram,truck,40,305,22,4800,5,6.9,53.0,233
+Toyota Tacoma,Toyota,truck,32,278,21,4400,5,6.6,38.0,213
+Chevy Suburban,Chevrolet,suv,60,355,18,5800,8,6.9,144.7,226
+Honda Odyssey,Honda,van,39,280,22,4600,8,7.0,158.0,205
+Chrysler Pacifica,Chrysler,van,40,287,22,4500,7,7.3,140.5,204
+Volvo XC90,Volvo,suv,58,295,25,4600,7,6.2,65.5,195
+Lexus RX,Lexus,suv,50,275,25,4400,5,7.2,46.2,193
+BMW X5,BMW,suv,66,335,25,4800,5,5.3,33.9,194
