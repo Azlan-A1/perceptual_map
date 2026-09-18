@@ -36,6 +36,10 @@ patchwork, scales, grid, ragg**. Nothing to install.
   (an axis blending all the specs into one score) and the percentage is how
   much of the difference between cars that axis captures. It then names what
   each axis on screen mostly measures — e.g. *PC1 (41.4%) is mostly size*.
+- **Labels never overlap**, at any window size. Each car's name takes the
+  first clear spot near it, most distinctive cars first. On a narrow window a
+  name with no room near its car is left off, and the key says how many — zoom
+  in or widen the window to bring them back.
 - **Body types**, silhouette size, labels, quadrants, hulls.
 - **Light / dark toggle** in the header. It themes the entire app — chrome,
   cards, tables, both plots, and the downloaded PNG — not just the map.
@@ -75,7 +79,7 @@ so **73.5%** of the variance is on the two axes you see.
 | `data/cars.csv` | 28 models x 8 attributes. Edit or extend it; nothing else needs changing. |
 | `R/silhouettes.R` | Body-type polygon shapes, `car_grob()`, and the `GeomCar` ggplot2 geom. |
 | `R/pca.R` | `fit_map()`, transforms, sign pinning, `axis_name()`. |
-| `R/layout.R` | Axis limits, aspect fitting, label repel, inset corner picking. |
+| `R/layout.R` | Layout measurement, aspect fitting, label placement, quadrant tags, inset corner picking. |
 | `R/plot.R` | `build_map()`, `build_compass()`, `compose_map()`, `pm_bg()`, theming. |
 | `R/explain.R` | The How it works tab, generated from `CARS` / `ATTRS` so it cannot go stale. |
 | `app.R` | The Shiny app. |

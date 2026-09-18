@@ -22,78 +22,177 @@ panel_pt <- function(dev_in, panel_frac = c(0.84, 0.82)) {
   c(dev_in[1] * 72 * panel_frac[1], dev_in[2] * 72 * panel_frac[2])
 }
 
-#' Force-directed label placement.
+#' Label placement: a greedy search over candidate spots.
+#'
+#' Works in points on the panel, where car glyphs (sized in points) and text
+#' (measured in points) are commensurable. Each label tries rings of candidate
+#' positions around its car, nearest ring first; within a ring, directions
+#' pointing away from neighbouring cars come first. It takes the first spot that
+#' overlaps no placed label, no car glyph and no obstacle and stays on the
+#' panel.
+#'
+#' The most distinctive cars -- furthest from the centre -- choose first. On a
+#' perceptual map distance from the centre IS distinctiveness, so those are the
+#' names most worth keeping when space runs out; the crowd near the middle is
+#' the average car, and zooming in separates it anyway. Measured across 16
+#' small-window layouts this kept the outliers (MX-5, Suburban, Odyssey) that a
+#' crowded-first order was losing, while hiding no labels at 900px and up.
+#'
+#' This replaced a force-directed repel that did not converge in dense
+#' clusters: measured on the rendered plot it left 20-50 overlaps on small
+#' windows, because pushed labels bounced between neighbours instead of
+#' finding the gap. A search finds a clear spot whenever one exists in reach.
+#'
+#' A label with no clear spot within `max_pt` of its car is left OFF rather
+#' than parked across the map: a name 150pt from its car, joined by a leader
+#' crossing half the cluster, reads worse than no name. `placed` reports which,
+#' so the caller can say how many were hidden.
 #'
 #' @param ax,ay anchor (car) positions in data units
 #' @param labels character vector
-#' @param xlim,ylim panel limits in data units
-#' @param dev_in device size in inches, c(width, height)
+#' @param xlim,ylim limits of the region labels must stay inside, data units
+#' @param dev_in device size in inches; only used for the default `ppt`
 #' @param car_pt car glyph width in points (matches geom_car)
 #' @param font_pt label font size in points
-#' @return data.frame(lx, ly) label positions in data units
+#' @param ppt size of the xlim/ylim region in points. Pass the MEASURED size.
+#' @param label_w measured label widths in points; estimated from nchar if NULL
+#' @param obstacles data.frame(xmin, xmax, ymin, ymax), data units, to keep off
+#' @param max_pt how far past touching its car a label may travel; by default
+#'   a tenth of the panel diagonal, so a big window keeps every label
+#' @return data.frame(lx, ly, placed) label centres in data units, input order
 repel_labels <- function(ax, ay, labels, xlim, ylim, dev_in = c(11, 9),
-                         car_pt = 26, aspect = 2.4, font_pt = 7.5, iter = 1400) {
+                         car_pt = 26, aspect = 2.4, font_pt = 7.5,
+                         ppt = panel_pt(dev_in), label_w = NULL, obstacles = NULL,
+                         max_pt = NULL, step_pt = 3) {
   n <- length(ax)
-  if (!n) return(data.frame(lx = numeric(0), ly = numeric(0)))
-  ppt <- panel_pt(dev_in)
+  if (!n) return(data.frame(lx = numeric(0), ly = numeric(0), placed = logical(0)))
+  if (is.null(max_pt)) max_pt <- max(24, 0.10 * sqrt(sum(ppt^2)))
+  sx <- ppt[1] / diff(xlim); sy <- ppt[2] / diff(ylim)
+  cx <- (ax - xlim[1]) * sx; cy <- (ay - ylim[1]) * sy                # cars, in points
 
-  # data -> npc
-  nx <- (ax - xlim[1]) / diff(xlim)
-  ny <- (ay - ylim[1]) / diff(ylim)
+  # Label boxes. Measured widths come from the PDF font metrics, which run
+  # ~4% narrower than the screen renderer's, hence the 1.05.
+  lw <- (if (is.null(label_w)) nchar(labels) * font_pt * 0.62 else label_w * 1.05) + 6
+  lh <- font_pt * 1.55
+  gw <- car_pt + 2; gh <- car_pt / aspect + 2
 
-  gw <- car_pt / ppt[1]                       # glyph half-extents in npc
-  gh <- (car_pt / aspect) / ppt[2]
-  lw <- (nchar(labels) * font_pt * 0.62 + 4) / ppt[1]
-  lh <- (font_pt * 1.65) / ppt[2]
+  # Everything fixed: the car glyphs, then any obstacles.
+  fx0 <- cx - gw / 2; fx1 <- cx + gw / 2; fy0 <- cy - gh / 2; fy1 <- cy + gh / 2
+  if (!is.null(obstacles) && nrow(obstacles)) {
+    fx0 <- c(fx0, (obstacles$xmin - xlim[1]) * sx); fx1 <- c(fx1, (obstacles$xmax - xlim[1]) * sx)
+    fy0 <- c(fy0, (obstacles$ymin - ylim[1]) * sy); fy1 <- c(fy1, (obstacles$ymax - ylim[1]) * sy)
+  }
 
-  # Seed each label in the direction that points AWAY from its neighbours.
-  # Starting every label directly underneath its car makes dense clusters settle
-  # into a vertical stack the repel then struggles to break apart.
-  dirx <- numeric(n); diry <- numeric(n)
-  for (i in seq_len(n)) {
-    dx <- nx[i] - nx; dy <- ny[i] - ny
-    d2 <- dx^2 + dy^2; d2[i] <- Inf
+  # Preferred direction for each label: away from its nearest neighbours.
+  away <- vapply(seq_len(n), function(i) {
+    dx <- cx[i] - cx; dy <- cy[i] - cy; d2 <- dx^2 + dy^2; d2[i] <- Inf
     near <- order(d2)[seq_len(min(5, n - 1))]
-    if (!length(near) || !is.finite(d2[near[1]])) { dirx[i] <- 0; diry[i] <- -1; next }
-    w  <- 1 / (sqrt(d2[near]) + 1e-6)
+    if (!length(near) || !is.finite(d2[near[1]])) return(-pi / 2)
+    w <- 1 / (sqrt(d2[near]) + 1e-6)
     vx <- sum(dx[near] * w); vy <- sum(dy[near] * w)
-    L  <- sqrt(vx^2 + vy^2)
-    if (L < 1e-9) { dirx[i] <- 0; diry[i] <- -1 } else { dirx[i] <- vx / L; diry[i] <- vy / L }
-  }
-  off <- gh * 0.60 + lh * 0.70
-  lx <- nx + dirx * off * 1.6
-  ly <- ny + diry * off
+    if (vx^2 + vy^2 < 1e-12) -pi / 2 else atan2(vy, vx)
+  }, 0)
+  turn <- c(0, as.vector(rbind(seq(15, 180, 15), -seq(15, 180, 15))))[1:24] * pi / 180
 
-  for (it in seq_len(iter)) {
-    fx <- numeric(n); fy <- numeric(n)
-    for (i in seq_len(n)) {
-      for (j in seq_len(n)) {                 # label vs label
-        if (i == j) next
-        dx <- lx[j] - lx[i]; dy <- ly[j] - ly[i]
-        ox <- (lw[i] + lw[j]) / 2 - abs(dx); oy <- lh - abs(dy)
-        if (ox > 0 && oy > 0) {
-          if (oy < ox) { s <- if (dy >= 0) 1 else -1; fy[i] <- fy[i] - s * oy * 0.50 }
-          else         { s <- if (dx >= 0) 1 else -1; fx[i] <- fx[i] - s * ox * 0.50 }
-        }
-      }
-      for (k in seq_len(n)) {                 # label vs car glyph
-        dx <- nx[k] - lx[i]; dy <- ny[k] - ly[i]
-        ox <- (lw[i] + gw) / 2 - abs(dx); oy <- (lh + gh) / 2 - abs(dy)
-        if (ox > 0 && oy > 0) {
-          if (oy < ox) { s <- if (dy >= 0) 1 else -1; fy[i] <- fy[i] - s * oy * 0.80 }
-          else         { s <- if (dx >= 0) 1 else -1; fx[i] <- fx[i] - s * ox * 0.80 }
-        }
-      }
+  # Tie-break: how many glyphs are close enough to compete for the same space.
+  crowd <- vapply(seq_len(n), function(i)
+    sum(abs(cx - cx[i]) < (gw + lw[i]) & abs(cy - cy[i]) < 3 * (gh + lh)) - 1, 0)
+  ox <- (0 - xlim[1]) * sx; oy <- (0 - ylim[1]) * sy               # the average car
+  far <- (cx - ox)^2 + (cy - oy)^2
+  ord <- order(-far, crowd)
+
+  px <- rep(NA_real_, n); py <- rep(NA_real_, n)
+  for (i in ord) {
+    th <- away[i] + turn
+    placed <- which(!is.na(px))
+    rx0 <- c(fx0, px[placed] - lw[placed] / 2); rx1 <- c(fx1, px[placed] + lw[placed] / 2)
+    ry0 <- c(fy0, py[placed] - lh / 2);         ry1 <- c(fy1, py[placed] + lh / 2)
+    best <- NULL
+    for (d in seq(0, max_pt, by = step_pt)) {
+      # Candidate centres on a rectangle around the glyph, so the d = 0 ring
+      # touches the car without covering it, whatever the direction.
+      A <- (gw + lw[i]) / 2 + d; B <- (gh + lh) / 2 + d
+      t <- pmin(A / abs(cos(th)), B / abs(sin(th)))
+      qx <- cx[i] + t * cos(th); qy <- cy[i] + t * sin(th)
+      x0 <- qx - lw[i] / 2; x1 <- qx + lw[i] / 2; y0 <- qy - lh / 2; y1 <- qy + lh / 2
+      inb <- x0 >= 0 & x1 <= ppt[1] & y0 >= 0 & y1 <= ppt[2]
+      # pmax keeps the FIRST argument's attributes, so the matrix goes first.
+      ovw <- pmax(outer(x1, rx1, pmin) - outer(x0, rx0, pmax), 0)
+      ovh <- pmax(outer(y1, ry1, pmin) - outer(y0, ry0, pmax), 0)
+      cost <- rowSums(ovw * ovh)
+      ok <- which(inb & cost == 0)
+      if (length(ok)) { best <- ok[1]; px[i] <- qx[best]; py[i] <- qy[best]; break }
     }
-    fx <- fx + (nx - lx) * 0.004              # weak spring back to the car
-    fy <- fy + (ny - ly) * 0.004
-    if (max(abs(c(fx, fy))) < 1e-5) break
-    lx <- pmin(pmax(lx + fx * 0.55, lw / 2),        1 - lw / 2)
-    ly <- pmin(pmax(ly + fy * 0.55, lh * 0.60), 1 - lh * 0.60)
   }
 
-  data.frame(lx = lx * diff(xlim) + xlim[1],
-             ly = ly * diff(ylim) + ylim[1])
+  data.frame(lx = px / sx + xlim[1], ly = py / sy + ylim[1], placed = !is.na(px))
+}
+
+#' Measure the layout instead of guessing it.
+#'
+#' Returns the space, in points, that everything OUTSIDE the panel takes up
+#' (titles, axes, legend, key), read from the real gtable. coord_fixed() makes
+#' the panel a "null" unit, so the other rows and columns are absolute and can
+#' be summed. Also measures text widths for each entry of `texts`
+#' (list(label, fontsize, fontface)). Earlier this was guessed as a fixed
+#' fraction of the device, which put the panel ~16% taller than it really was
+#' and let labels overlap on small screens.
+#'
+#' Uses a throwaway null PDF device and restores the current one, so it is
+#' safe to call while Shiny is mid-render.
+measure_layout <- function(skel, dev_in, texts = list()) {
+  old <- grDevices::dev.cur()
+  grDevices::pdf(NULL, width = dev_in[1], height = dev_in[2])
+  on.exit({ grDevices::dev.off(); if (old > 1) grDevices::dev.set(old) }, add = TRUE)
+  g  <- ggplot2::ggplotGrob(skel)
+  np <- c(sum(grid::convertWidth(g$widths, "pt", valueOnly = TRUE)),
+          sum(grid::convertHeight(g$heights, "pt", valueOnly = TRUE)))
+  width_of <- function(s, gp) max(vapply(strsplit(s, "\n", fixed = TRUE)[[1]], function(l)
+    grid::convertWidth(grid::grobWidth(grid::textGrob(l, gp = gp)), "pt", valueOnly = TRUE), 0))
+  w <- lapply(texts, function(t) {
+    gp <- grid::gpar(fontsize = t$fontsize, fontface = t$fontface)
+    stats::setNames(vapply(t$label, width_of, 0, gp = gp), names(t$label))
+  })
+  list(nonpanel = np, widths = w)
+}
+
+#' Place the quadrant tags in the inner corners, from measured widths.
+#'
+#' Two tags sharing a row wrap onto two lines ("LOW WEIGHT /" over "HIGH
+#' QUICKNESS") when they would not fit side by side. A tag that would sit on a
+#' car glyph is dropped: it is only an orientation aid, and the car is the data.
+#' Returns the text placement plus each tag's rectangle in data units, which
+#' build_map uses to drop any tag that would cover a car label.
+quad_tags <- function(quads, ixl, iyl, inner_pt, w1, w2, font_pt,
+                      drop_quad = NULL, cars = NULL, car_pt = 26, aspect = 2.4) {
+  keys <- setdiff(c("tl", "tr", "bl", "br"), drop_quad)
+  if (!length(keys)) return(NULL)
+  dpx <- diff(ixl) / inner_pt[1]; dpy <- diff(iyl) / inner_pt[2]   # data units per point
+  gap <- 4
+  wrap <- vapply(c(top = "t", bottom = "b"), function(r) {
+    ks <- keys[substr(keys, 1, 1) == r]
+    length(ks) > 0 && sum(w1[ks]) + 16 > inner_pt[1] - 2 * gap
+  }, TRUE)
+  out <- do.call(rbind, lapply(keys, function(k) {
+    top <- substr(k, 1, 1) == "t"; right <- substr(k, 2, 2) == "r"
+    wr  <- wrap[[if (top) "top" else "bottom"]]
+    w   <- if (wr) w2[[k]] else w1[[k]]
+    h   <- font_pt * (if (wr) 2.15 else 1.1)
+    x   <- if (right) ixl[2] - gap * dpx else ixl[1] + gap * dpx
+    y   <- if (top)   iyl[2] - gap * dpy else iyl[1] + gap * dpy
+    data.frame(key = k, x = x, y = y, hjust = as.numeric(right), vjust = as.numeric(top),
+               label = if (wr) sub(" / ", " /\n", quads[[k]], fixed = TRUE) else quads[[k]],
+               xmin = if (right) x - w * dpx else x, xmax = if (right) x else x + w * dpx,
+               ymin = if (top) y - h * dpy else y,   ymax = if (top) y else y + h * dpy)
+  }))
+  if (!is.null(cars) && nrow(cars)) {
+    gw <- car_pt / 2 * dpx; gh <- car_pt / aspect / 2 * dpy
+    on_car <- vapply(seq_len(nrow(out)), function(i) any(
+      cars$x + gw > out$xmin[i] & cars$x - gw < out$xmax[i] &
+      cars$y + gh > out$ymin[i] & cars$y - gh < out$ymax[i]), TRUE)
+    out <- out[!on_car, , drop = FALSE]
+  }
+  out
 }
 
 #' Widen limits by a band of `band_pt` points on each side.

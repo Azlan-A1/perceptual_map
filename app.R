@@ -128,7 +128,7 @@ server <- function(input, output, session) {
     xl <- rng$x; yl <- rng$y
     if (is.null(xl)) xl <- map_limits(d$.x)
     if (is.null(yl)) yl <- map_limits(d$.y)
-    fa <- fit_aspect(xl, yl, dev_in()); xl <- fa$x; yl <- fa$y
+    # build_map fits the aspect itself, from the measured panel.
     build_map(m, xpc = xpc(), ypc = ypc(),
               car_pt = input$car_pt, dev_in = dev_in(),
               show_labels = input$labels, show_quadrants = input$quads,

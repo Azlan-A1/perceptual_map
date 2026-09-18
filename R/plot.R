@@ -107,9 +107,9 @@ axis_key <- function(m, xpc, ypc, dev_in, font_pt) {
 #' The main perceptual map.
 build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                       show_labels = TRUE, show_quadrants = TRUE, show_hulls = FALSE,
-                      show_directions = TRUE, show_key = TRUE, bodies = NULL, dev_in = c(11, 9), xlim = NULL, ylim = NULL,
-                      dark = FALSE, quads = NULL, title = "Perceptual Map of the Car Market",
-                      subtitle = NULL, drop_quad = NULL) {
+                      show_directions = TRUE, show_key = TRUE, bodies = NULL, dev_in = c(11, 9),
+                      xlim = NULL, ylim = NULL, dark = FALSE, quads = NULL,
+                      title = "Perceptual Map of the Car Market", subtitle = NULL, drop_quad = NULL) {
 
   d <- m$cars
   if (!is.null(bodies)) d <- d[d$body %in% bodies, , drop = FALSE]
@@ -120,32 +120,109 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   if (is.null(xlim)) xlim <- map_limits(d$.x)
   if (is.null(ylim)) ylim <- map_limits(d$.y)
 
-  # The key is decided first: every line it adds comes out of the panel's
-  # height, and the aspect fit below needs to know how much is left.
-  note    <- "Silhouettes are drawn in R. Specs are approximate, curated for illustration."
-  key_pt  <- 11 * 0.78
-  key     <- if (show_key) c(axis_key(m, xpc, ypc, dev_in, key_pt), note) else note
-  lost    <- (length(key) - 1) * key_pt * 1.3 / 72 / dev_in[2]   # beyond the old one-line caption
-  pfrac   <- c(0.84, 0.82 - lost)
-
-  # Direction labels get a band of their own around the edge. Without it they
-  # land on whichever car is most extreme -- the Corvette sits right where the
-  # top label wants to go, because that is what makes it the most extreme car.
-  ppt      <- panel_pt(dev_in, pfrac)
-  dir_size <- 2.9                                          # mm, ggplot's text unit
-  band_pt  <- if (show_directions) dir_size * ggplot2::.pt * 2.3 else 0
-  xlim <- add_band(xlim, band_pt, ppt[1]); ylim <- add_band(ylim, band_pt, ppt[2])
-  fa <- fit_aspect(xlim, ylim, dev_in, panel_frac = c(0.84, 0.70 - lost)); xlim <- fa$x; ylim <- fa$y
-  # Re-measured on the final limits. Car labels and quadrant tags stay inside
-  # (ixl, iyl); only the direction labels live in the band.
-  bx  <- band_pt / ppt[1] * diff(xlim); by <- band_pt / ppt[2] * diff(ylim)
-  ixl <- xlim + c(bx, -bx); iyl <- ylim + c(by, -by)
-
   fg  <- if (dark) "#E6E8EC" else "grey12"
   mid <- if (dark) "#9AA0AA" else "grey55"
   qa  <- if (dark) 0.10 else 0.05
   if (is.null(quads)) quads <- auto_quads(m$loadings, xpc, ypc)
+  lab_size <- 2.6; tag_size <- 2.8; dir_size <- 2.9      # mm, ggplot's text unit
 
+  # ---- everything around the panel ------------------------------------------
+  vx <- m$ve[as.integer(sub("PC", "", xpc))]
+  vy <- m$ve[as.integer(sub("PC", "", ypc))]
+  if (is.null(subtitle))
+    subtitle <- sprintf("PCA on %d attributes — %d models, %.1f%% of variance on these two axes",
+                        length(m$vars), nrow(d), vx + vy)
+  note   <- "Silhouettes are drawn in R. Specs are approximate, curated for illustration."
+  key_pt <- 11 * 0.78
+  fill_scale <- ggplot2::scale_fill_manual(values = pal, name = "Body type",
+                                           limits = intersect(BODY_LEVELS, unique(d$body)))
+  make_chrome <- function(key) list(
+    ggplot2::labs(
+      title = title, subtitle = subtitle,
+      x = sprintf("%s (%.1f%%)  —  %s →", xpc, vx, axis_name(m$loadings, xpc)),
+      y = sprintf("%s (%.1f%%)  —  %s →", ypc, vy, axis_name(m$loadings, ypc)),
+      caption = paste(key, collapse = "\n")),
+    pm_theme(dark),
+    # A key reads left to right like prose; the bare note keeps its old spot.
+    if (length(key) > 1) ggplot2::theme(
+      plot.caption = ggplot2::element_text(hjust = 0, size = key_pt, lineheight = 1.15,
+                                           colour = if (dark) "#B4BAC4" else "grey30"),
+      plot.caption.position = "plot"))
+  hidden_note <- function(k, n) if (k > 0)
+    sprintf("%d of %d car labels are hidden for space. Zoom in or widen the window to see them.", k, n)
+
+  # ---- measure the real panel, fit the limits to it, place the labels --------
+  # A bare plot with the same title, axes, legend and key has the same layout
+  # around its panel as the finished one; car labels, tags and direction labels
+  # all live inside the panel and cannot change it.
+  #
+  # Runs twice at most. If labels had to be hidden, the note saying so is one
+  # more caption line, which shrinks the panel, so the layout is redone with it
+  # in place. (Were the second pass to hide none, dropping the line only makes
+  # the panel bigger, which can open gaps but never close them.)
+  wrap_q <- stats::setNames(sub(" / ", " /\n", quads, fixed = TRUE), names(quads))
+  band_pt <- if (show_directions) dir_size * ggplot2::.pt * 2.3 else 0
+  xlim0 <- xlim; ylim0 <- ylim; n_hidden <- 0L
+  for (pass in 1:2) {
+    key <- c(if (show_key) axis_key(m, xpc, ypc, dev_in, key_pt),
+             hidden_note(n_hidden, nrow(d)), note)
+    chrome <- make_chrome(key)
+    skel <- ggplot2::ggplot(d, ggplot2::aes(.x, .y, body = body, fill = body)) +
+      geom_car(car_pt = car_pt) + fill_scale +
+      ggplot2::coord_fixed(ratio = 1, xlim = xlim0, ylim = ylim0, expand = FALSE) + chrome
+    ms <- measure_layout(skel, dev_in, list(
+      tag  = list(label = quads,  fontsize = tag_size * ggplot2::.pt, fontface = 2),
+      tag2 = list(label = wrap_q, fontsize = tag_size * ggplot2::.pt, fontface = 2),
+      car  = list(label = stats::setNames(d$model, d$model), fontsize = lab_size * ggplot2::.pt, fontface = 1)))
+    ppt <- dev_in * 72 - ms$nonpanel
+    if (any(!is.finite(ppt) | ppt < 60)) ppt <- panel_pt(dev_in)   # device too small to measure sensibly
+
+    # Direction labels get a band of their own around the edge. Without it they
+    # land on whichever car is most extreme -- the Corvette sits right where the
+    # top label wants to go, because that is what makes it the most extreme car.
+    xlim <- add_band(xlim0, band_pt, ppt[1]); ylim <- add_band(ylim0, band_pt, ppt[2])
+    fa <- fit_aspect(xlim, ylim, dev_in, panel_frac = ppt / (dev_in * 72)); xlim <- fa$x; ylim <- fa$y
+    # Re-measured on the final limits. Car labels and quadrant tags stay inside
+    # (ixl, iyl); only the direction labels live in the band.
+    bx  <- band_pt / ppt[1] * diff(xlim); by <- band_pt / ppt[2] * diff(ylim)
+    ixl <- xlim + c(bx, -bx); iyl <- ylim + c(by, -by)
+    inner_pt <- ppt - 2 * band_pt
+
+    vis <- d[d$.x >= xlim[1] & d$.x <= xlim[2] & d$.y >= ylim[1] & d$.y <= ylim[2], , drop = FALSE]
+    tags <- if (show_quadrants)
+      quad_tags(quads, ixl, iyl, inner_pt, ms$widths$tag, ms$widths$tag2, tag_size * ggplot2::.pt,
+                drop_quad = drop_quad, cars = data.frame(x = vis$.x, y = vis$.y), car_pt = car_pt)
+
+    lab <- NULL
+    if (show_labels) {
+      # Only cars actually on screen get a label. After a zoom, off-screen cars'
+      # labels would otherwise pile up on the edge pointing at nothing.
+      # Car labels outrank the quadrant tags: a car's name is data, while the
+      # tags mostly repeat what the crosshair ends already say. So labels are
+      # placed first, and a tag is only drawn where it covers no label.
+      L <- repel_labels(vis$.x, vis$.y, vis$model, ixl, iyl, car_pt = car_pt,
+                        font_pt = lab_size * ggplot2::.pt, ppt = inner_pt,
+                        label_w = unname(ms$widths$car[vis$model]))
+      lab <- vis; lab$lx <- L$lx; lab$ly <- L$ly
+      lab <- lab[L$placed, , drop = FALSE]
+      if (!is.null(tags) && nrow(tags) && nrow(lab)) {
+        hw <- (ms$widths$car[lab$model] * 1.05 + 6) / 2 * diff(ixl) / inner_pt[1]
+        hh <- lab_size * ggplot2::.pt * 1.55 / 2 * diff(iyl) / inner_pt[2]
+        covers <- vapply(seq_len(nrow(tags)), function(k) any(
+          lab$lx + hw > tags$xmin[k] & lab$lx - hw < tags$xmax[k] &
+          lab$ly + hh > tags$ymin[k] & lab$ly - hh < tags$ymax[k]), TRUE)
+        tags <- tags[!covers, , drop = FALSE]
+      }
+    }
+    found <- if (is.null(lab)) 0L else nrow(vis) - nrow(lab)
+    if (pass == 2 || found == 0) break
+    n_hidden <- found
+  }
+  # The note must quote the final count; its line was already reserved.
+  if (found != n_hidden) chrome <- make_chrome(c(if (show_key) axis_key(m, xpc, ypc, dev_in, key_pt),
+                                                 hidden_note(found, nrow(d)), note))
+
+  # ---- draw ------------------------------------------------------------------
   p <- ggplot2::ggplot()
 
   if (show_quadrants) {
@@ -180,14 +257,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                                      alpha = .10, colour = NA, show.legend = FALSE)
   }
 
-  if (show_labels) {
-    # Label only the cars actually on screen. After a zoom the repel would
-    # otherwise clamp off-screen cars' labels to the panel edge, each with a
-    # leader line pointing at nothing.
-    lab <- d[d$.x >= xlim[1] & d$.x <= xlim[2] & d$.y >= ylim[1] & d$.y <= ylim[2], , drop = FALSE]
-    L <- repel_labels(lab$.x, lab$.y, lab$model, ixl, iyl, car_pt = car_pt,
-                      dev_in = dev_in * c(diff(ixl) / diff(xlim), diff(iyl) / diff(ylim)))
-    lab$lx <- L$lx; lab$ly <- L$ly
+  if (show_labels && nrow(lab)) {
     p <- p + ggplot2::geom_segment(data = lab, ggplot2::aes(.x, .y, xend = lx, yend = ly),
                                    colour = mid, linewidth = .2)
   }
@@ -196,23 +266,18 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     geom_car(data = d, ggplot2::aes(.x, .y, body = body, fill = body), car_pt = car_pt) +
     ggplot2::geom_point(data = d, ggplot2::aes(.x, .y), size = .4, colour = mid)
 
-  if (show_labels)
+  if (show_labels && nrow(lab))
     p <- p + ggplot2::geom_label(data = lab, ggplot2::aes(lx, ly, label = model),
-                                 size = 2.6, colour = fg, linewidth = 0,
+                                 size = lab_size, colour = fg, linewidth = 0,
                                  label.padding = grid::unit(1, "pt"),
                                  fill = scales::alpha(pm_bg(dark), .80))
 
-  if (show_quadrants) {
-    qs <- list(c(ixl[2], iyl[2], 1, 1.6, "tr"), c(ixl[1], iyl[2], 0, 1.6, "tl"),
-               c(ixl[1], iyl[1], 0, -1.0, "bl"), c(ixl[2], iyl[1], 1, -1.0, "br"))
-    for (q in qs) {
-      if (!is.null(drop_quad) && q[[5]] == drop_quad) next  # the compass inset lives here
-      p <- p + ggplot2::annotate("text", x = as.numeric(q[[1]]), y = as.numeric(q[[2]]),
-                                 label = quads[[q[[5]]]], hjust = as.numeric(q[[3]]),
-                                 vjust = as.numeric(q[[4]]), size = 2.8, fontface = "bold",
-                                 colour = QUAD_FILL[[q[[5]]]], alpha = .75)
-    }
-  }
+  if (!is.null(tags) && nrow(tags))
+    p <- p + ggplot2::geom_text(data = tags, ggplot2::aes(x, y, label = label, hjust = hjust,
+                                                          vjust = vjust, colour = key),
+                                size = tag_size, fontface = "bold", lineheight = 1.05,
+                                alpha = .75, inherit.aes = FALSE, show.legend = FALSE) +
+      ggplot2::scale_colour_manual(values = QUAD_FILL, guide = "none")
 
   if (show_directions) {
     dl <- direction_labels(m, xpc, ypc, xlim, ylim, ppt, dir_size * ggplot2::.pt, drop_quad)
@@ -222,28 +287,9 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                                   colour = fg, alpha = .88, inherit.aes = FALSE)
   }
 
-  vx <- m$ve[as.integer(sub("PC", "", xpc))]
-  vy <- m$ve[as.integer(sub("PC", "", ypc))]
-  if (is.null(subtitle))
-    subtitle <- sprintf("PCA on %d attributes — %d models, %.1f%% of variance on these two axes",
-                        length(m$vars), nrow(d), vx + vy)
-
-  p +
-    ggplot2::scale_fill_manual(values = pal, name = "Body type",
-                               limits = intersect(BODY_LEVELS, unique(d$body))) +
+  p + fill_scale +
     ggplot2::coord_fixed(ratio = 1, xlim = xlim, ylim = ylim, expand = FALSE) +
-    ggplot2::labs(
-      title = title, subtitle = subtitle,
-      x = sprintf("%s (%.1f%%)  —  %s →", xpc, vx, axis_name(m$loadings, xpc)),
-      y = sprintf("%s (%.1f%%)  —  %s →", ypc, vy, axis_name(m$loadings, ypc)),
-      caption = paste(key, collapse = "\n")
-    ) +
-    pm_theme(dark) +
-    # A key reads left to right like prose; the bare note keeps its old spot.
-    (if (show_key) ggplot2::theme(
-       plot.caption = ggplot2::element_text(hjust = 0, size = key_pt, lineheight = 1.15,
-                                            colour = if (dark) "#B4BAC4" else "grey30"),
-       plot.caption.position = "plot"))
+    chrome
 }
 
 #' Loadings compass: a correlation circle, kept OFF the data area.
