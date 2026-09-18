@@ -35,6 +35,7 @@ ui <- page_sidebar(
     sliderInput("car_pt", "Car size (pt)", min = 12, max = 70, value = 34, step = 2),
     hr(),
     checkboxInput("labels",   "Model labels",   TRUE),
+    checkboxInput("dirs",     "Direction labels", TRUE),
     checkboxInput("quads",    "Quadrant shading", TRUE),
     checkboxInput("compass",  "Loadings compass", TRUE),
     checkboxInput("hulls",    "Segment hulls",  FALSE),
@@ -130,6 +131,7 @@ server <- function(input, output, session) {
     build_map(m, xpc = xpc(), ypc = ypc(),
               car_pt = input$car_pt, dev_in = dev_in(),
               show_labels = input$labels, show_quadrants = input$quads,
+              show_directions = input$dirs,
               show_hulls = input$hulls, bodies = input$bodies,
               xlim = xl, ylim = yl, dark = dark())
   })
@@ -175,6 +177,8 @@ server <- function(input, output, session) {
   })
 
   # ---- explainer, keyed to whatever is on screen right now -------------------
+  output$xp_axes <- renderUI(axes_explainer(md(), pdat(), xpc(), ypc()))
+
   output$xp_live <- renderUI({
     m <- md(); vx <- m$ve[as.integer(sub("PC", "", xpc()))]
     vy <- m$ve[as.integer(sub("PC", "", ypc()))]

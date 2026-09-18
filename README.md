@@ -27,12 +27,19 @@ patchwork, scales, grid, ragg**. Nothing to install.
   Because silhouettes are sized in *points*, not data units, zooming genuinely
   spreads a crowded cluster apart instead of magnifying it.
 - **Click a car** for its spec card.
+- **Direction labels** at the four ends of the crosshair say what moving that
+  way means — e.g. *heavier · more cargo · longer* on the right. They are
+  recomputed from the loadings whenever you change attributes or axes, drop
+  their weakest words on a narrow window, and sit in a band of their own so car
+  labels never land on them.
 - **Body types**, silhouette size, labels, quadrants, hulls.
 - **Light / dark toggle** in the header. It themes the entire app — chrome,
   cards, tables, both plots, and the downloaded PNG — not just the map.
 - Tabs for variance explained, the loadings table, the raw data, and
-  **How it works**, an in-app explanation of the whole pipeline that reports the
-  variance and axis names of whatever fit is currently on screen.
+  **How it works**, an in-app explanation of the whole pipeline. Its *What left,
+  right, up and down mean* section lays the four directions out as a compass,
+  with correlation strengths, the furthest cars each way, the four corners as
+  segments, and which attributes the current view shows poorly — all live.
 - **Download PNG** exports the current view at 200 dpi.
 
 ## How the map is built

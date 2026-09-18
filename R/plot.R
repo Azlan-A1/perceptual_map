@@ -43,10 +43,49 @@ auto_quads <- function(loadings, xpc, ypc) {
     br = sprintf("HIGH %s / LOW %s",  toupper(xt), toupper(yt)))
 }
 
+#' Labels for the four ends of the crosshair, placed in the edge bands.
+#'
+#' Each label is centred on the crosshair and slid along its edge only as far as
+#' needed to stay on the panel. If the compass is inset in a corner, the two
+#' edges that corner touches lose that stretch. On a narrow panel the weakest
+#' words are dropped first, and an end with no room at all is left unlabelled
+#' rather than overlapping something.
+direction_labels <- function(m, xpc, ypc, xlim, ylim, ppt, font_pt, drop_quad = NULL) {
+  ex <- axis_ends(m$loadings, xpc); ey <- axis_ends(m$loadings, ypc)
+  dpx <- diff(xlim) / ppt[1]; dpy <- diff(ylim) / ppt[2]     # data units per point
+  clear <- 8                                                  # pt kept free at each end
+  span <- list(top = xlim, bottom = xlim, left = ylim, right = ylim)
+  if (!is.null(drop_quad)) {
+    b  <- inset_bounds(drop_quad)
+    ix <- xlim[1] + c(b[["left"]], b[["right"]]) * diff(xlim)
+    iy <- ylim[1] + c(b[["bottom"]], b[["top"]]) * diff(ylim)
+    at_top <- substr(drop_quad, 1, 1) == "t"; at_right <- substr(drop_quad, 2, 2) == "r"
+    span[[if (at_top) "top" else "bottom"]] <- if (at_right) c(xlim[1], ix[1]) else c(ix[2], xlim[2])
+    span[[if (at_right) "right" else "left"]] <- if (at_top) c(ylim[1], iy[1]) else c(iy[2], ylim[2])
+  }
+  one <- function(edge, words) {
+    dp  <- if (edge %in% c("top", "bottom")) dpx else dpy
+    lo  <- span[[edge]][1] + clear * dp; hi <- span[[edge]][2] - clear * dp
+    txt <- fit_words(words, (hi - lo) / dp, font_pt)
+    if (is.null(txt)) return(NULL)
+    pos <- slide_into(0, text_pt(txt, font_pt) / 2 * dp, lo, hi)
+    # For rotated text, vjust pushes the label AWAY from its anchor along the
+    # text's own "down", which at angle 90 is +x and at angle -90 is -x -- so the
+    # same vjust keeps both side labels just inside the panel.
+    switch(edge,
+      top    = data.frame(x = pos,     y = ylim[2], angle =   0, vjust =  1.35, label = txt),
+      bottom = data.frame(x = pos,     y = ylim[1], angle =   0, vjust = -0.45, label = txt),
+      left   = data.frame(x = xlim[1], y = pos,     angle =  90, vjust =  1.35, label = txt),
+      right  = data.frame(x = xlim[2], y = pos,     angle = -90, vjust =  1.35, label = txt))
+  }
+  do.call(rbind, list(one("top", ey$pos), one("bottom", ey$neg),
+                      one("left", ex$neg), one("right", ex$pos)))
+}
+
 #' The main perceptual map.
 build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                       show_labels = TRUE, show_quadrants = TRUE, show_hulls = FALSE,
-                      bodies = NULL, dev_in = c(11, 9), xlim = NULL, ylim = NULL,
+                      show_directions = TRUE, bodies = NULL, dev_in = c(11, 9), xlim = NULL, ylim = NULL,
                       dark = FALSE, quads = NULL, title = "Perceptual Map of the Car Market",
                       subtitle = NULL, drop_quad = NULL) {
 
@@ -58,7 +97,19 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   d$.x <- d[[xpc]]; d$.y <- d[[ypc]]
   if (is.null(xlim)) xlim <- map_limits(d$.x)
   if (is.null(ylim)) ylim <- map_limits(d$.y)
+
+  # Direction labels get a band of their own around the edge. Without it they
+  # land on whichever car is most extreme -- the Corvette sits right where the
+  # top label wants to go, because that is what makes it the most extreme car.
+  ppt      <- panel_pt(dev_in)
+  dir_size <- 2.9                                          # mm, ggplot's text unit
+  band_pt  <- if (show_directions) dir_size * ggplot2::.pt * 2.3 else 0
+  xlim <- add_band(xlim, band_pt, ppt[1]); ylim <- add_band(ylim, band_pt, ppt[2])
   fa <- fit_aspect(xlim, ylim, dev_in); xlim <- fa$x; ylim <- fa$y
+  # Re-measured on the final limits. Car labels and quadrant tags stay inside
+  # (ixl, iyl); only the direction labels live in the band.
+  bx  <- band_pt / ppt[1] * diff(xlim); by <- band_pt / ppt[2] * diff(ylim)
+  ixl <- xlim + c(bx, -bx); iyl <- ylim + c(by, -by)
 
   fg  <- if (dark) "#E6E8EC" else "grey12"
   mid <- if (dark) "#9AA0AA" else "grey55"
@@ -79,9 +130,18 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                         fill = QUAD_FILL[["br"]], alpha = qa + .01)
   }
 
-  p <- p +
-    ggplot2::geom_hline(yintercept = 0, colour = mid, linewidth = .35) +
-    ggplot2::geom_vline(xintercept = 0, colour = mid, linewidth = .35)
+  if (show_directions) {
+    ah <- grid::arrow(length = grid::unit(5, "pt"), type = "closed", ends = "both")
+    p <- p +
+      ggplot2::annotate("segment", x = ixl[1], xend = ixl[2], y = 0, yend = 0,
+                        colour = mid, linewidth = .35, arrow = ah, arrow.fill = mid) +
+      ggplot2::annotate("segment", x = 0, xend = 0, y = iyl[1], yend = iyl[2],
+                        colour = mid, linewidth = .35, arrow = ah, arrow.fill = mid)
+  } else {
+    p <- p +
+      ggplot2::geom_hline(yintercept = 0, colour = mid, linewidth = .35) +
+      ggplot2::geom_vline(xintercept = 0, colour = mid, linewidth = .35)
+  }
 
   if (show_hulls) {
     h <- hull_rows(d, ".x", ".y", "body")
@@ -91,9 +151,14 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   }
 
   if (show_labels) {
-    L <- repel_labels(d$.x, d$.y, d$model, xlim, ylim, dev_in = dev_in, car_pt = car_pt)
-    d$lx <- L$lx; d$ly <- L$ly
-    p <- p + ggplot2::geom_segment(data = d, ggplot2::aes(.x, .y, xend = lx, yend = ly),
+    # Label only the cars actually on screen. After a zoom the repel would
+    # otherwise clamp off-screen cars' labels to the panel edge, each with a
+    # leader line pointing at nothing.
+    lab <- d[d$.x >= xlim[1] & d$.x <= xlim[2] & d$.y >= ylim[1] & d$.y <= ylim[2], , drop = FALSE]
+    L <- repel_labels(lab$.x, lab$.y, lab$model, ixl, iyl, car_pt = car_pt,
+                      dev_in = dev_in * c(diff(ixl) / diff(xlim), diff(iyl) / diff(ylim)))
+    lab$lx <- L$lx; lab$ly <- L$ly
+    p <- p + ggplot2::geom_segment(data = lab, ggplot2::aes(.x, .y, xend = lx, yend = ly),
                                    colour = mid, linewidth = .2)
   }
 
@@ -102,14 +167,14 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     ggplot2::geom_point(data = d, ggplot2::aes(.x, .y), size = .4, colour = mid)
 
   if (show_labels)
-    p <- p + ggplot2::geom_label(data = d, ggplot2::aes(lx, ly, label = model),
+    p <- p + ggplot2::geom_label(data = lab, ggplot2::aes(lx, ly, label = model),
                                  size = 2.6, colour = fg, linewidth = 0,
                                  label.padding = grid::unit(1, "pt"),
                                  fill = scales::alpha(pm_bg(dark), .80))
 
   if (show_quadrants) {
-    qs <- list(c(xlim[2], ylim[2], 1, 1.6, "tr"), c(xlim[1], ylim[2], 0, 1.6, "tl"),
-               c(xlim[1], ylim[1], 0, -1.0, "bl"), c(xlim[2], ylim[1], 1, -1.0, "br"))
+    qs <- list(c(ixl[2], iyl[2], 1, 1.6, "tr"), c(ixl[1], iyl[2], 0, 1.6, "tl"),
+               c(ixl[1], iyl[1], 0, -1.0, "bl"), c(ixl[2], iyl[1], 1, -1.0, "br"))
     for (q in qs) {
       if (!is.null(drop_quad) && q[[5]] == drop_quad) next  # the compass inset lives here
       p <- p + ggplot2::annotate("text", x = as.numeric(q[[1]]), y = as.numeric(q[[2]]),
@@ -117,6 +182,14 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                                  vjust = as.numeric(q[[4]]), size = 2.8, fontface = "bold",
                                  colour = QUAD_FILL[[q[[5]]]], alpha = .75)
     }
+  }
+
+  if (show_directions) {
+    dl <- direction_labels(m, xpc, ypc, xlim, ylim, ppt, dir_size * ggplot2::.pt, drop_quad)
+    if (!is.null(dl) && nrow(dl))
+      p <- p + ggplot2::geom_text(data = dl, ggplot2::aes(x, y, label = label, angle = angle, vjust = vjust),
+                                  hjust = 0.5, size = dir_size, fontface = "bold",
+                                  colour = fg, alpha = .88, inherit.aes = FALSE)
   }
 
   vx <- m$ve[as.integer(sub("PC", "", xpc))]

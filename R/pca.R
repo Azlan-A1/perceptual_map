@@ -11,6 +11,12 @@ ATTRS <- data.frame(
   var       = c("price_k","hp",   "mpg",       "weight","seats","sec060",   "cargo","length"),
   label     = c("price",  "power","efficiency","weight","seats","quickness","cargo","length"),
   transform = c("none",   "none", "log",       "none",  "none", "negate",   "none", "none"),
+  # Words for each end of an attribute, used to say what moving along an axis
+  # means. `more` is the high end AFTER the transform, so quickness -> "quicker".
+  more = c("pricier", "more powerful", "more efficient", "heavier", "more seats",
+           "quicker", "more cargo", "longer"),
+  less = c("cheaper", "less powerful", "less efficient", "lighter", "fewer seats",
+           "slower",  "less cargo", "shorter"),
   stringsAsFactors = FALSE
 )
 
@@ -80,6 +86,30 @@ fit_map <- function(cars, vars = DEFAULT_VARS, anchors = c(PC1 = "weight", PC2 =
     vars     = colnames(X),
     prcomp   = pc
   )
+}
+
+#' What moving along an axis means, in words.
+#'
+#' Uses the attributes correlating with the axis at |r| >= thresh, strongest
+#' first. A NEGATIVE correlation describes the opposite end, so weight at
+#' r = -0.9 contributes "lighter" to the high end, not "heavier". If nothing
+#' clears the threshold the strongest attribute is used anyway and `weak` is
+#' set, so an end is never blank.
+#' @return list(pos, neg, var, r, weak) -- pos/neg are the high/low end words.
+axis_ends <- function(loadings, pc, n = 3, thresh = 0.45) {
+  r <- loadings[[pc]]
+  o <- order(abs(r), decreasing = TRUE)
+  keep <- o[abs(r[o]) >= thresh]
+  weak <- !length(keep)
+  if (weak) keep <- o[1]
+  keep <- keep[seq_len(min(n, length(keep)))]
+  a  <- ATTRS[match(loadings$var[keep], ATTRS$label), ]
+  up <- r[keep] > 0
+  list(pos  = ifelse(up, a$more, a$less),
+       neg  = ifelse(up, a$less, a$more),
+       var  = loadings$var[keep],
+       r    = r[keep],
+       weak = weak)
 }
 
 #' Name an axis from the attributes that load most strongly on it.

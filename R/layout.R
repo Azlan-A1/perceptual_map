@@ -96,6 +96,38 @@ repel_labels <- function(ax, ay, labels, xlim, ylim, dev_in = c(11, 9),
              ly = ly * diff(ylim) + ylim[1])
 }
 
+#' Widen limits by a band of `band_pt` points on each side.
+#' Widening a range makes every point worth more data units, so simply adding
+#' band_pt's current worth comes out short. Solved for the width AFTER widening.
+add_band <- function(lim, band_pt, panel_pt) {
+  f <- band_pt / panel_pt
+  if (!is.finite(f) || f <= 0 || f >= 0.25) return(lim)
+  b <- f * diff(lim) / (1 - 2 * f)
+  lim + c(-b, b)
+}
+
+#' Estimated rendered width of a string in points (same heuristic as repel_labels).
+text_pt <- function(s, font_pt) nchar(s) * font_pt * 0.60 + 6
+
+#' The longest leading run of `words` that fits in `avail_pt`, joined by a
+#' middle dot. Words arrive strongest-first, so it is the weakest that get
+#' dropped on a narrow screen. NULL if not even the first word fits.
+fit_words <- function(words, avail_pt, font_pt, sep = " \u00b7 ") {
+  for (k in rev(seq_along(words))) {
+    s <- paste(words[seq_len(k)], collapse = sep)
+    if (text_pt(s, font_pt) <= avail_pt) return(s)
+  }
+  NULL
+}
+
+#' Centre a label on `centre` (the crosshair), sliding it along the edge just
+#' far enough to stay inside [lo, hi]. Falls back to the middle of the span when
+#' the crosshair is out of view, e.g. after zooming into one corner.
+slide_into <- function(centre, half, lo, hi) {
+  if (!is.finite(centre) || centre < lo || centre > hi) centre <- (lo + hi) / 2
+  min(max(centre, lo + half), hi - half)
+}
+
 #' Convex hull rows per group, for optional segment shading.
 hull_rows <- function(df, x, y, group) {
   do.call(rbind, lapply(split(df, df[[group]]), function(g) {
