@@ -17,6 +17,10 @@ ATTRS <- data.frame(
            "quicker", "more cargo", "longer"),
   less = c("cheaper", "less powerful", "less efficient", "lighter", "fewer seats",
            "slower",  "less cargo", "shorter"),
+  # What kind of thing each attribute measures, so a component can be given a
+  # one-word name ("size", "performance") from the attributes that drive it.
+  theme = c("price", "performance", "efficiency", "size", "size",
+            "performance", "size", "size"),
   stringsAsFactors = FALSE
 )
 
@@ -110,6 +114,21 @@ axis_ends <- function(loadings, pc, n = 3, thresh = 0.45) {
        var  = loadings$var[keep],
        r    = r[keep],
        weak = weak)
+}
+
+#' A one-word name for a component: the theme whose attributes load on it most.
+#'
+#' Sums |r| per theme over the attributes at |r| >= thresh. A second theme is
+#' named too if it carries at least 60% of the leader's weight, so a component
+#' that is genuinely two things says so. NA when no attribute clears the
+#' threshold -- the component has no clear meaning and should not pretend to.
+axis_theme <- function(loadings, pc, thresh = 0.45) {
+  r <- loadings[[pc]]
+  strong <- abs(r) >= thresh
+  if (!any(strong)) return(NA_character_)
+  th <- ATTRS$theme[match(loadings$var, ATTRS$label)]
+  w  <- sort(tapply(abs(r[strong]), th[strong], sum), decreasing = TRUE)
+  if (length(w) > 1 && w[[2]] >= 0.6 * w[[1]]) paste(names(w)[1], "&", names(w)[2]) else names(w)[1]
 }
 
 #' Name an axis from the attributes that load most strongly on it.

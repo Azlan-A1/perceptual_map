@@ -82,10 +82,32 @@ direction_labels <- function(m, xpc, ypc, xlim, ylim, ppt, font_pt, drop_quad = 
                       one("left", ex$neg), one("right", ex$pos)))
 }
 
+#' The key under the map: what "PC" and the percentages mean, and what the two
+#' axes on screen measure. Wrapped to the device width, one axis per line when
+#' both will not fit on one.
+#' @return character vector of caption lines
+axis_key <- function(m, xpc, ypc, dev_in, font_pt) {
+  width <- max(40, floor(dev_in[1] * 72 * 0.94 / (font_pt * 0.50)))
+  one <- function(pc, where) {
+    v  <- m$ve[as.integer(sub("PC", "", pc))]
+    th <- axis_theme(m$loadings, pc)
+    e  <- axis_ends(m$loadings, pc)
+    sprintf("%s (%.1f%%) %s: %s = %s.", pc, v,
+            if (is.na(th)) "has no clear pattern" else paste("is mostly", th),
+            where, paste(e$pos, collapse = ", "))
+  }
+  what <- sprintf(paste0("PC = principal component: an axis that blends all %d specs into one score per car. ",
+                         "The %% is how much of the difference between cars that axis captures."),
+                  length(m$vars))
+  axes <- paste0(one(xpc, "further right"), "    ", one(ypc, "higher up"))
+  if (nchar(axes) > width) axes <- c(one(xpc, "further right"), one(ypc, "higher up"))
+  unlist(lapply(c(what, axes), strwrap, width = width))
+}
+
 #' The main perceptual map.
 build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                       show_labels = TRUE, show_quadrants = TRUE, show_hulls = FALSE,
-                      show_directions = TRUE, bodies = NULL, dev_in = c(11, 9), xlim = NULL, ylim = NULL,
+                      show_directions = TRUE, show_key = TRUE, bodies = NULL, dev_in = c(11, 9), xlim = NULL, ylim = NULL,
                       dark = FALSE, quads = NULL, title = "Perceptual Map of the Car Market",
                       subtitle = NULL, drop_quad = NULL) {
 
@@ -98,14 +120,22 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   if (is.null(xlim)) xlim <- map_limits(d$.x)
   if (is.null(ylim)) ylim <- map_limits(d$.y)
 
+  # The key is decided first: every line it adds comes out of the panel's
+  # height, and the aspect fit below needs to know how much is left.
+  note    <- "Silhouettes are drawn in R. Specs are approximate, curated for illustration."
+  key_pt  <- 11 * 0.78
+  key     <- if (show_key) c(axis_key(m, xpc, ypc, dev_in, key_pt), note) else note
+  lost    <- (length(key) - 1) * key_pt * 1.3 / 72 / dev_in[2]   # beyond the old one-line caption
+  pfrac   <- c(0.84, 0.82 - lost)
+
   # Direction labels get a band of their own around the edge. Without it they
   # land on whichever car is most extreme -- the Corvette sits right where the
   # top label wants to go, because that is what makes it the most extreme car.
-  ppt      <- panel_pt(dev_in)
+  ppt      <- panel_pt(dev_in, pfrac)
   dir_size <- 2.9                                          # mm, ggplot's text unit
   band_pt  <- if (show_directions) dir_size * ggplot2::.pt * 2.3 else 0
   xlim <- add_band(xlim, band_pt, ppt[1]); ylim <- add_band(ylim, band_pt, ppt[2])
-  fa <- fit_aspect(xlim, ylim, dev_in); xlim <- fa$x; ylim <- fa$y
+  fa <- fit_aspect(xlim, ylim, dev_in, panel_frac = c(0.84, 0.70 - lost)); xlim <- fa$x; ylim <- fa$y
   # Re-measured on the final limits. Car labels and quadrant tags stay inside
   # (ixl, iyl); only the direction labels live in the band.
   bx  <- band_pt / ppt[1] * diff(xlim); by <- band_pt / ppt[2] * diff(ylim)
@@ -206,9 +236,14 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
       title = title, subtitle = subtitle,
       x = sprintf("%s (%.1f%%)  —  %s →", xpc, vx, axis_name(m$loadings, xpc)),
       y = sprintf("%s (%.1f%%)  —  %s →", ypc, vy, axis_name(m$loadings, ypc)),
-      caption = "Silhouettes are drawn in R. Specs are approximate, curated for illustration."
+      caption = paste(key, collapse = "\n")
     ) +
-    pm_theme(dark)
+    pm_theme(dark) +
+    # A key reads left to right like prose; the bare note keeps its old spot.
+    (if (show_key) ggplot2::theme(
+       plot.caption = ggplot2::element_text(hjust = 0, size = key_pt, lineheight = 1.15,
+                                            colour = if (dark) "#B4BAC4" else "grey30"),
+       plot.caption.position = "plot"))
 }
 
 #' Loadings compass: a correlation circle, kept OFF the data area.

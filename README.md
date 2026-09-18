@@ -32,11 +32,18 @@ patchwork, scales, grid, ragg**. Nothing to install.
   recomputed from the loadings whenever you change attributes or axes, drop
   their weakest words on a narrow window, and sit in a band of their own so car
   labels never land on them.
+- **Axis key** under the map defines the terms: *PC* is a principal component
+  (an axis blending all the specs into one score) and the percentage is how
+  much of the difference between cars that axis captures. It then names what
+  each axis on screen mostly measures — e.g. *PC1 (41.4%) is mostly size*.
 - **Body types**, silhouette size, labels, quadrants, hulls.
 - **Light / dark toggle** in the header. It themes the entire app — chrome,
   cards, tables, both plots, and the downloaded PNG — not just the map.
 - Tabs for variance explained, the loadings table, the raw data, and
-  **How it works**, an in-app explanation of the whole pipeline. Its *What left,
+  **How it works**, an in-app explanation of the whole pipeline. *What PC1, PC2
+  and the rest are* tables every component live — its share, running total,
+  plain-English name and strongest specs — and flags any spec the default view
+  hides (efficiency, which lives on PC3). *What left,
   right, up and down mean* section lays the four directions out as a compass,
   with correlation strengths, the furthest cars each way, the four corners as
   segments, and which attributes the current view shows poorly — all live.

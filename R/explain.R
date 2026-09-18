@@ -52,6 +52,11 @@ xp_css <- htmltools::HTML("
 .xp .dir .r { font-family: var(--bs-font-monospace); font-size: .72rem; color: var(--bs-secondary-color); }
 .xp .dir .c { font-size: .8rem; margin-top: .35rem; }
 .xp .quad td { width: 42%; vertical-align: top; }
+.xp .pcs td, .xp .pcs th { vertical-align: top; }
+.xp .pcs tr.faint td { color: var(--bs-secondary-color); }
+.xp .pcs .onscreen { font-size: .66rem; font-weight: 700; margin-left: .35rem; }
+.xp .pcs .bar { height: .35rem; border-radius: .2rem; background: var(--bs-primary); opacity: .75; }
+.xp .pcs td:nth-child(2) { min-width: 7rem; }
 .xp .quad th { font-size: .8rem; }
 @media (max-width: 800px) {
   .xp .compass { grid-template-columns: 1fr; grid-template-areas: 'up' 'left' 'mid' 'right' 'down'; }
@@ -199,6 +204,65 @@ axes_explainer <- function(m, d, xpc, ypc, thresh = 0.45) {
   )
 }
 
+#' The table of every component for the current fit, plus the notes that
+#' depend on it. A plain function so it can be checked from a script.
+pcs_explainer <- function(m, xpc, ypc, thresh = 0.45, max_axis = 4) {
+  L <- m$loadings; k <- m$npc; pcs <- paste0("PC", seq_len(k))
+  cum <- cumsum(m$ve)
+
+  row <- function(i) {
+    pc <- pcs[i]; r <- L[[pc]]; o <- order(abs(r), decreasing = TRUE)[seq_len(min(3, nrow(L)))]
+    th <- axis_theme(L, pc, thresh)
+    e  <- axis_ends(L, pc, thresh = thresh)
+    badge <- c(if (pc == xpc) "across", if (pc == ypc) "up")
+    tags$tr(class = if (is.na(th)) "faint",
+      tags$td(tags$strong(pc),
+              if (length(badge)) tags$span(class = "badge text-bg-primary onscreen",
+                                           paste("on map:", paste(badge, collapse = " & ")))),
+      tags$td(sprintf("%.1f%%", m$ve[i]),
+              tags$div(class = "bar mt-1", style = sprintf("width: %.0f%%;", m$ve[i]))),
+      tags$td(sprintf("%.1f%%", cum[i])),
+      tags$td(if (is.na(th)) tags$em("no clear pattern") else tags$strong(th)),
+      tags$td(if (is.na(th)) "\u2014" else paste(e$pos, collapse = ", ")),
+      tags$td(class = "mono", paste(sprintf("%s %+.2f", L$var[o], r[o]), collapse = ", ")))
+  }
+  tbl <- tags$div(class = "table-responsive",
+    tags$table(class = "table table-sm pcs mb-2",
+      tags$thead(tags$tr(tags$th("Component"), tags$th("Share"), tags$th("Running total"),
+                         tags$th("Mostly"), tags$th("Higher score means"), tags$th("Strongest specs (r)"))),
+      tags$tbody(lapply(seq_len(k), row))))
+
+  # Attributes the default pair shows poorly, and where they went instead.
+  first2 <- intersect(c("PC1", "PC2"), pcs)
+  hidden <- lapply(seq_len(nrow(L)), function(j) {
+    if (max(abs(unlist(L[j, first2]))) >= thresh) return(NULL)
+    rr <- abs(unlist(L[j, pcs])); best <- which.max(rr)
+    if (rr[best] < thresh) return(NULL)
+    tags$li(tags$strong(L$var[j]), sprintf(" barely registers on PC1 or PC2, but lines up with %s (r %.2f). ",
+                                           pcs[best], rr[best]),
+            if (best <= max_axis) sprintf("Set an axis to %s to see it.", pcs[best])
+            else sprintf("%s is beyond the axis dropdowns, so this map cannot show it.", pcs[best]))
+  })
+  hidden <- Filter(Negate(is.null), hidden)
+  tail_share <- if (k > max_axis) sum(m$ve[(max_axis + 1):k]) else 0
+
+  tagList(
+    tbl,
+    tags$p(class = "small text-body-secondary mb-2",
+           "r is the correlation between a spec and the component's score: + means the spec rises as ",
+           "the score rises, \u2212 means it falls. Greyed-out rows have no spec at 0.45 or above."),
+    tags$ul(class = "mb-0",
+      if (k >= 2) tags$li(sprintf(paste0("The map opens on PC1 against PC2 because together they carry %.1f%% ",
+                                         "of the differences between cars \u2014 more than any other pair."), cum[2])),
+      hidden,
+      if (tail_share > 0) tags$li(sprintf(paste0("The axis dropdowns stop at PC%d. Everything after it carries ",
+                                                 "%.1f%% between them, so plotting it would mostly show noise."),
+                                          max_axis, tail_share)),
+      tags$li("Untick specs in the sidebar and PCA reruns: the components can change meaning, ",
+              "and this table changes with them."))
+  )
+}
+
 #' Build the whole tab.
 explain_ui <- function(cars, attrs) {
   n_car   <- nrow(cars)
@@ -247,7 +311,12 @@ explain_ui <- function(cars, attrs) {
         tags$code("prcomp"), " fail.")
     ),
 
-    xp_sec(3, "The PCA itself",
+    xp_sec(3, "What PC1, PC2 and the rest are",
+      tags$p(tags$strong("PC stands for principal component."), " Each one is a new axis that ",
+             "PCA builds by blending all the selected specs into a single score per car. They are ",
+             "numbered by how much of the difference between cars they capture \u2014 PC1 the most, ",
+             "PC2 the next most \u2014 and none of them overlap, so each picks up something the earlier ",
+             "ones missed."),
       tags$p("With ", n_attr, " attributes each car is a point in ", n_attr,
              "-dimensional space. Principal Component Analysis finds the direction through that ",
              "cloud along which the cars are most spread out — that becomes ", tags$strong("PC1"),
@@ -257,10 +326,11 @@ explain_ui <- function(cars, attrs) {
              "information. The percentages in the boxes at the top are each component's share of ",
              "total variance: ", tags$span(class = "mono", "100 × sdev² / Σ sdev²"),
              ". The ", tags$strong("Variance"), " tab plots all of them."),
-      xp_note("Why two axes are enough.",
-        "The first two components between them usually carry the majority of the variance, which is ",
-        "why a flat picture is a fair summary. The exact figure for your current selection is in the ",
-        "subtitle above the map — if it drops low, treat the layout with more caution.")
+      tags$h6(class = "mt-3 mb-2 fw-bold", "Every component, for the specs you have ticked"),
+      uiOutput("xp_pcs"),
+      xp_note("On the map.",
+        "The key under the map repeats this for the two axes on screen: what PC means, what the ",
+        "percentage is, and what each axis mostly measures.")
     ),
 
     xp_sec(4, "Making the map reproducible",
@@ -297,6 +367,8 @@ explain_ui <- function(cars, attrs) {
                  "attribute pulls toward; length is how well it is captured by this particular ",
                  "pair of axes. A short arrow means that attribute mostly lives in a component ",
                  "you are not currently looking at."),
+          tags$p(tags$strong("The key."), " The lines under the map define PC and the percentages, ",
+                 "and name what the two axes on screen mostly measure."),
           tags$p(tags$strong("Crosshair ends."), " The words at each end say what moving that ",
                  "way means, from ", tags$code("axis_ends()"), ". They get a band of their own ",
                  "around the edge, so car labels never land on them."),
