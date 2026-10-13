@@ -18,6 +18,10 @@ ui <- page_sidebar(
     input_dark_mode(id = "mode", mode = "light")
   ),
   theme = bs_theme(version = 5, preset = "flatly"),
+  # The page scrolls rather than filling the window: with the map at its full
+  # height and the compass stacked under it on a narrow window, a fill layout
+  # squeezed the value boxes from 105px to 61px and clipped the numbers.
+  fillable = FALSE,
 
   sidebar = sidebar(
     width = 300,
@@ -46,8 +50,12 @@ ui <- page_sidebar(
     downloadButton("dl", "Download PNG", class = "btn-sm btn-primary")
   ),
 
+  # bslib floors the main area at 576px, so with a 300px sidebar the page needs
+  # 892px and anything narrower clips on the right -- the third value box first.
+  tags$head(tags$style(HTML(".bslib-page-main { min-width: 0 !important; }"))),
+
   layout_columns(
-    col_widths = c(4, 4, 4), row_heights = "auto",
+    col_widths = breakpoints(sm = 12, md = 6, lg = 4), row_heights = "auto",
     value_box("X axis variance", textOutput("vx"), theme = "primary",   height = "105px"),
     value_box("Y axis variance", textOutput("vy"), theme = "secondary", height = "105px"),
     value_box("Cars shown",      textOutput("nshown"), theme = "success", height = "105px")
@@ -56,11 +64,19 @@ ui <- page_sidebar(
   navset_card_tab(
     nav_panel(
       "Map",
+      # fillable = FALSE so the plot keeps its 620px: once the compass stacks
+      # underneath, a fillable body splits the height between them and the map
+      # collapsed to 232px.
       card_body(
+        fillable = FALSE,
         helpText("Drag a box then double-click to zoom in. Double-click empty space to reset. ",
                  "Click a car for its detail card."),
         layout_columns(
-          col_widths = c(9, 3),
+          # Below xl the compass drops under the map rather than squeezing it:
+          # the map is the point, and a narrow panel is what hides car labels.
+          # At a 1024px window, side-by-side left the map 490px and hid 19 of
+          # 28 names; stacked it gets the full width and hides none.
+          col_widths = breakpoints(sm = c(12, 12), xl = c(9, 3)),
           plotOutput("map", height = "620px",
                      click = "click", dblclick = "dblclick",
                      brush = brushOpts(id = "brush", resetOnNew = TRUE)),
