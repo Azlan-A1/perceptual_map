@@ -8,6 +8,9 @@ suppressPackageStartupMessages({
 for (f in c("silhouettes", "pca", "layout", "plot", "explain")) source(file.path("R", paste0(f, ".R")))
 
 CARS <- read.csv("data/cars.csv", stringsAsFactors = FALSE)
+# Only offer body types the data actually has, in the canonical order, so
+# removing every car of a type does not leave a checkbox that filters nothing.
+BODIES <- intersect(BODY_LEVELS, unique(CARS$body))
 VAR_CHOICES <- stats::setNames(ATTRS$var, ATTRS$label)
 PC_CHOICES  <- paste0("PC", 1:4)
 
@@ -35,7 +38,7 @@ ui <- page_sidebar(
       selectInput("ypc", "Y axis", PC_CHOICES, selected = "PC2")
     ),
     checkboxGroupInput("bodies", "Body types",
-                       choices = BODY_LEVELS, selected = BODY_LEVELS, inline = TRUE),
+                       choices = BODIES, selected = BODIES, inline = TRUE),
     sliderInput("car_pt", "Car size (pt)", min = 12, max = 70, value = 34, step = 2),
     hr(),
     checkboxInput("labels",   "Model labels",   TRUE),

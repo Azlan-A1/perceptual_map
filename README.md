@@ -44,7 +44,7 @@ patchwork, scales, grid, ragg**. Nothing to install.
 - **Labels never overlap**, at any window size. Each car's name takes the
   first clear spot near it, most distinctive cars first. On a narrow window the
   label text shrinks just enough for every name to fit, down to a 5pt floor;
-  all 28 still fit at a 450px-wide plot. Below that, any name with no room is
+  all 25 still fit at a 450px-wide plot. Below that, any name with no room is
   left off and the key says how many — zoom in or widen the window to bring
   them back.
 - **Body types**, silhouette size, labels, quadrants, hulls.
@@ -85,7 +85,7 @@ so **73.5%** of the variance is on the two axes you see.
 
 | Path | What it does |
 |---|---|
-| `data/cars.csv` | 28 models x 8 attributes. Edit or extend it; nothing else needs changing. |
+| `data/cars.csv` | 25 models x 8 attributes. Edit or extend it; nothing else needs changing. |
 | `R/silhouettes.R` | Body-type polygon shapes, `car_grob()`, and the `GeomCar` ggplot2 geom. |
 | `R/pca.R` | `fit_map()`, transforms, sign pinning, `axis_name()`. |
 | `R/layout.R` | Layout measurement, aspect fitting, label placement, quadrant tags, inset corner picking. |
