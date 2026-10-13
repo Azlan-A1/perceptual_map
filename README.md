@@ -37,9 +37,11 @@ patchwork, scales, grid, ragg**. Nothing to install.
   much of the difference between cars that axis captures. It then names what
   each axis on screen mostly measures — e.g. *PC1 (41.4%) is mostly size*.
 - **Labels never overlap**, at any window size. Each car's name takes the
-  first clear spot near it, most distinctive cars first. On a narrow window a
-  name with no room near its car is left off, and the key says how many — zoom
-  in or widen the window to bring them back.
+  first clear spot near it, most distinctive cars first. On a narrow window the
+  label text shrinks just enough for every name to fit, down to a 5pt floor;
+  all 28 still fit at a 450px-wide plot. Below that, any name with no room is
+  left off and the key says how many — zoom in or widen the window to bring
+  them back.
 - **Body types**, silhouette size, labels, quadrants, hulls.
 - **Light / dark toggle** in the header. It themes the entire app — chrome,
   cards, tables, both plots, and the downloaded PNG — not just the map.

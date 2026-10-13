@@ -109,7 +109,8 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                       show_labels = TRUE, show_quadrants = TRUE, show_hulls = FALSE,
                       show_directions = TRUE, show_key = TRUE, bodies = NULL, dev_in = c(11, 9),
                       xlim = NULL, ylim = NULL, dark = FALSE, quads = NULL,
-                      title = "Perceptual Map of the Car Market", subtitle = NULL, drop_quad = NULL) {
+                      title = "Perceptual Map of the Car Market", subtitle = NULL, drop_quad = NULL,
+                      lab_size = 2.6, lab_size_min = 1.8) {
 
   d <- m$cars
   if (!is.null(bodies)) d <- d[d$body %in% bodies, , drop = FALSE]
@@ -124,7 +125,11 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   mid <- if (dark) "#9AA0AA" else "grey55"
   qa  <- if (dark) 0.10 else 0.05
   if (is.null(quads)) quads <- auto_quads(m$loadings, xpc, ypc)
-  lab_size <- 2.6; tag_size <- 2.8; dir_size <- 2.9      # mm, ggplot's text unit
+  tag_size <- 2.8; dir_size <- 2.9                      # mm, ggplot's text unit
+  # Label text shrinks only as far as it must: the ladder is tried largest
+  # first and stops at the first size where every name fits.
+  ladder <- unique(c(seq(lab_size, lab_size_min, by = -0.15), lab_size_min))
+  ladder <- ladder[ladder <= lab_size & ladder >= lab_size_min]
 
   # ---- everything around the panel ------------------------------------------
   vx <- m$ve[as.integer(sub("PC", "", xpc))]
@@ -170,10 +175,16 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     skel <- ggplot2::ggplot(d, ggplot2::aes(.x, .y, body = body, fill = body)) +
       geom_car(car_pt = car_pt) + fill_scale +
       ggplot2::coord_fixed(ratio = 1, xlim = xlim0, ylim = ylim0, expand = FALSE) + chrome
-    ms <- measure_layout(skel, dev_in, list(
-      tag  = list(label = quads,  fontsize = tag_size * ggplot2::.pt, fontface = 2),
-      tag2 = list(label = wrap_q, fontsize = tag_size * ggplot2::.pt, fontface = 2),
-      car  = list(label = stats::setNames(d$model, d$model), fontsize = lab_size * ggplot2::.pt, fontface = 1)))
+    # One measuring pass for everything, including a width set per ladder size:
+    # the device rounds font sizes to whole points, so widths do not scale by
+    # the nominal ratio and each size has to be measured.
+    models <- stats::setNames(d$model, d$model)
+    ms <- measure_layout(skel, dev_in, c(
+      list(tag  = list(label = quads,  fontsize = tag_size * ggplot2::.pt, fontface = 2),
+           tag2 = list(label = wrap_q, fontsize = tag_size * ggplot2::.pt, fontface = 2)),
+      stats::setNames(lapply(ladder, function(z)
+        list(label = models, fontsize = z * ggplot2::.pt, fontface = 1)), paste0("car", seq_along(ladder)))))
+    ms$widths$ladder <- ms$widths[paste0("car", seq_along(ladder))]
     ppt <- dev_in * 72 - ms$nonpanel
     if (any(!is.finite(ppt) | ppt < 60)) ppt <- panel_pt(dev_in)   # device too small to measure sensibly
 
@@ -200,14 +211,18 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
       # Car labels outrank the quadrant tags: a car's name is data, while the
       # tags mostly repeat what the crosshair ends already say. So labels are
       # placed first, and a tag is only drawn where it covers no label.
-      L <- repel_labels(vis$.x, vis$.y, vis$model, ixl, iyl, car_pt = car_pt,
-                        font_pt = lab_size * ggplot2::.pt, ppt = inner_pt,
-                        label_w = unname(ms$widths$car[vis$model]))
+      for (li in seq_along(ladder)) {
+        lab_pt <- ladder[li]
+        L <- repel_labels(vis$.x, vis$.y, vis$model, ixl, iyl, car_pt = car_pt,
+                          font_pt = lab_pt * ggplot2::.pt, ppt = inner_pt,
+                          label_w = unname(ms$widths$ladder[[li]][vis$model]))
+        if (all(L$placed)) break
+      }
       lab <- vis; lab$lx <- L$lx; lab$ly <- L$ly
       lab <- lab[L$placed, , drop = FALSE]
       if (!is.null(tags) && nrow(tags) && nrow(lab)) {
-        hw <- (ms$widths$car[lab$model] * 1.05 + 6) / 2 * diff(ixl) / inner_pt[1]
-        hh <- lab_size * ggplot2::.pt * 1.55 / 2 * diff(iyl) / inner_pt[2]
+        hw <- (ms$widths$ladder[[li]][lab$model] * 1.05 + 6) / 2 * diff(ixl) / inner_pt[1]
+        hh <- lab_pt * ggplot2::.pt * 1.55 / 2 * diff(iyl) / inner_pt[2]
         covers <- vapply(seq_len(nrow(tags)), function(k) any(
           lab$lx + hw > tags$xmin[k] & lab$lx - hw < tags$xmax[k] &
           lab$ly + hh > tags$ymin[k] & lab$ly - hh < tags$ymax[k]), TRUE)
@@ -268,7 +283,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
 
   if (show_labels && nrow(lab))
     p <- p + ggplot2::geom_label(data = lab, ggplot2::aes(lx, ly, label = model),
-                                 size = lab_size, colour = fg, linewidth = 0,
+                                 size = lab_pt, colour = fg, linewidth = 0,
                                  label.padding = grid::unit(1, "pt"),
                                  fill = scales::alpha(pm_bg(dark), .80))
 
