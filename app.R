@@ -90,7 +90,7 @@ ui <- page_sidebar(
       )
     ),
     nav_panel("Variance", card_body(plotOutput("scree", height = "380px"))),
-    nav_panel("Loadings", card_body(DTOutput("loadtab"), fillable = FALSE)),
+    nav_panel("Loadings", card_body(uiOutput("loadkey"), DTOutput("loadtab"), fillable = FALSE)),
     nav_panel(
       "Data",
       card_body(
@@ -244,6 +244,8 @@ server <- function(input, output, session) {
            subtitle = "Bars = individual, line = cumulative", x = NULL, y = "% of variance") +
       pm_theme(dark())
   }, res = 96, bg = "transparent")
+
+  output$loadkey <- renderUI(loadings_key(md(), xpc(), ypc()))
 
   output$loadtab <- renderDT({
     m <- md()

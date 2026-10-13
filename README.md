@@ -50,7 +50,8 @@ patchwork, scales, grid, ragg**. Nothing to install.
 - **Body types**, silhouette size, labels, quadrants, hulls.
 - **Light / dark toggle** in the header. It themes the entire app — chrome,
   cards, tables, both plots, and the downloaded PNG — not just the map.
-- Tabs for variance explained, the loadings table, the raw data, and
+- Tabs for variance explained, the loadings table — which now names each
+  component in words above the numbers — the raw data, and
   **How it works**, an in-app explanation of the whole pipeline. The Data tab
   downloads what it shows as CSV, body-type filter and all. *What PC1, PC2
   and the rest are* tables every component live — its share, running total,

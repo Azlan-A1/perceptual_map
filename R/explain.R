@@ -263,6 +263,37 @@ pcs_explainer <- function(m, xpc, ypc, thresh = 0.45, max_axis = 4) {
   )
 }
 
+#' A plain-English line for each component above the loadings table, so the
+#' columns are not just PC1..PC4. Same axis_theme()/axis_ends() as the map and
+#' the How it works tab, so the three cannot drift apart.
+loadings_key <- function(m, xpc, ypc, max_pc = 4, thresh = 0.45) {
+  pcs <- intersect(paste0("PC", seq_len(max_pc)), names(m$loadings))
+  if (!length(pcs)) return(NULL)
+  item <- function(pc) {
+    ve <- m$ve[as.integer(sub("PC", "", pc))]
+    th <- axis_theme(m$loadings, pc, thresh)
+    e  <- axis_ends(m$loadings, pc, thresh = thresh)
+    on <- c(if (pc == xpc) "across", if (pc == ypc) "up")
+    tags$div(class = "border rounded p-2 flex-fill", style = "min-width: 11rem;",
+      tags$div(class = "d-flex align-items-baseline gap-2 flex-wrap",
+        tags$strong(pc),
+        tags$span(class = "text-body-secondary small", sprintf("%.1f%% of the variance", ve)),
+        if (length(on)) tags$span(class = "badge text-bg-primary",
+                                  paste("on map:", paste(on, collapse = " & ")))),
+      tags$div(class = "fw-semibold mt-1",
+               if (is.na(th)) tags$em("no clear pattern") else th),
+      tags$div(class = "small text-body-secondary",
+               if (e$weak) "no spec reaches 0.45" else paste("higher =", paste(e$pos, collapse = ", "))))
+  }
+  tagList(
+    tags$div(class = "d-flex flex-wrap gap-2 mb-3", lapply(pcs, item)),
+    tags$p(class = "small text-body-secondary mb-2",
+           "Each number is the correlation between a spec and that component: ",
+           "+1 means they rise together, \u22121 means one rises as the other falls, 0 means unrelated. ",
+           "Cells are shaded past \u00b10.5 \u2014 blue for a strong positive, red for a strong negative.")
+  )
+}
+
 #' Build the whole tab.
 explain_ui <- function(cars, attrs) {
   n_car   <- nrow(cars)
