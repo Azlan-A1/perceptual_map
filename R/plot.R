@@ -33,16 +33,6 @@ pm_theme <- function(dark = FALSE, base_size = 11) {
 
 QUAD_FILL <- c(tr = "#C44E52", tl = "#4C72B0", bl = "#55A868", br = "#CCB974")
 
-#' Default quadrant tags, derived from whichever attribute dominates each axis.
-auto_quads <- function(loadings, xpc, ypc) {
-  xt <- loadings$var[which.max(abs(loadings[[xpc]]))]
-  yt <- loadings$var[which.max(abs(loadings[[ypc]]))]
-  c(tr = sprintf("HIGH %s / HIGH %s", toupper(xt), toupper(yt)),
-    tl = sprintf("LOW %s / HIGH %s",  toupper(xt), toupper(yt)),
-    bl = sprintf("LOW %s / LOW %s",   toupper(xt), toupper(yt)),
-    br = sprintf("HIGH %s / LOW %s",  toupper(xt), toupper(yt)))
-}
-
 #' Labels for the four ends of the crosshair, placed in the edge bands.
 #'
 #' Each label is centred on the crosshair and slid along its edge only as far as
@@ -130,7 +120,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                       show_labels = TRUE, show_quadrants = TRUE, show_hulls = FALSE,
                       show_directions = TRUE, show_key = TRUE, show_arrows = TRUE,
                       bodies = NULL, dev_in = c(11, 9),
-                      xlim = NULL, ylim = NULL, dark = FALSE, quads = NULL,
+                      xlim = NULL, ylim = NULL, dark = FALSE,
                       title = "Perceptual Map of the Car Market", subtitle = NULL, drop_quad = NULL,
                       lab_size = 2.6, lab_size_min = 1.8) {
 
@@ -146,8 +136,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   fg  <- if (dark) "#E6E8EC" else "grey12"
   mid <- if (dark) "#9AA0AA" else "grey55"
   qa  <- if (dark) 0.10 else 0.05
-  if (is.null(quads)) quads <- auto_quads(m$loadings, xpc, ypc)
-  tag_size <- 2.8; dir_size <- 2.9; arr_size <- 2.5      # mm, ggplot's text unit
+  dir_size <- 2.9; arr_size <- 2.5                      # mm, ggplot's text unit
   # Label text shrinks only as far as it must: the ladder is tried largest
   # first and stops at the first size where every name fits.
   ladder <- unique(c(seq(lab_size, lab_size_min, by = -0.15), lab_size_min))
@@ -189,7 +178,6 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   # more caption line, which shrinks the panel, so the layout is redone with it
   # in place. (Were the second pass to hide none, dropping the line only makes
   # the panel bigger, which can open gaps but never close them.)
-  wrap_q <- stats::setNames(sub(" / ", " /\n", quads, fixed = TRUE), names(quads))
   band_pt <- if (show_directions) dir_size * ggplot2::.pt * 2.3 else 0
   xlim0 <- xlim; ylim0 <- ylim; n_hidden <- 0L
   for (pass in 1:2) {
@@ -205,8 +193,6 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     # the nominal ratio and each size has to be measured.
     models <- stats::setNames(d$model, d$model)
     ms <- measure_layout(skel, dev_in, c(
-      list(tag  = list(label = quads,  fontsize = tag_size * ggplot2::.pt, fontface = 2),
-           tag2 = list(label = wrap_q, fontsize = tag_size * ggplot2::.pt, fontface = 2)),
       list(arrow = list(label = stats::setNames(m$loadings$var, m$loadings$var),
                         fontsize = arr_size * ggplot2::.pt, fontface = 2)),
       stats::setNames(lapply(ladder, function(z)
@@ -239,17 +225,10 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     }
 
     vis <- d[d$.x >= xlim[1] & d$.x <= xlim[2] & d$.y >= ylim[1] & d$.y <= ylim[2], , drop = FALSE]
-    tags <- if (show_quadrants)
-      quad_tags(quads, ixl, iyl, inner_pt, ms$widths$tag, ms$widths$tag2, tag_size * ggplot2::.pt,
-                drop_quad = drop_quad, cars = data.frame(x = vis$.x, y = vis$.y), car_pt = car_pt)
-
     lab <- NULL
     if (show_labels) {
       # Only cars actually on screen get a label. After a zoom, off-screen cars'
       # labels would otherwise pile up on the edge pointing at nothing.
-      # Car labels outrank the quadrant tags: a car's name is data, while the
-      # tags mostly repeat what the crosshair ends already say. So labels are
-      # placed first, and a tag is only drawn where it covers no label.
       for (li in seq_along(ladder)) {
         lab_pt <- ladder[li]
         L <- repel_labels(vis$.x, vis$.y, vis$model, ixl, iyl, car_pt = car_pt,
@@ -260,15 +239,6 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
       }
       lab <- vis; lab$lx <- L$lx; lab$ly <- L$ly
       lab <- lab[L$placed, , drop = FALSE]
-      if (!is.null(tags) && nrow(tags) && nrow(lab)) {
-        hw <- (ms$widths$ladder[[li]][lab$model] * 1.05 + 6) / 2 * diff(ixl) / inner_pt[1]
-        hh <- lab_pt * ggplot2::.pt * 1.55 / 2 * diff(iyl) / inner_pt[2]
-        bx0 <- c(lab$lx - hw, if (!is.null(arr)) arr$xmin); bx1 <- c(lab$lx + hw, if (!is.null(arr)) arr$xmax)
-        by0 <- c(lab$ly - hh, if (!is.null(arr)) arr$ymin); by1 <- c(lab$ly + hh, if (!is.null(arr)) arr$ymax)
-        covers <- vapply(seq_len(nrow(tags)), function(k) any(
-          bx1 > tags$xmin[k] & bx0 < tags$xmax[k] & by1 > tags$ymin[k] & by0 < tags$ymax[k]), TRUE)
-        tags <- tags[!covers, , drop = FALSE]
-      }
     }
     found <- if (is.null(lab)) 0L else nrow(vis) - nrow(lab)
     if (pass == 2 || found == 0) break
@@ -342,12 +312,6 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                                 size = arr_size, fontface = "bold", colour = if (dark) "#E6E8EC" else "grey15",
                                 alpha = .9, inherit.aes = FALSE)
 
-  if (!is.null(tags) && nrow(tags))
-    p <- p + ggplot2::geom_text(data = tags, ggplot2::aes(x, y, label = label, hjust = hjust,
-                                                          vjust = vjust, colour = key),
-                                size = tag_size, fontface = "bold", lineheight = 1.05,
-                                alpha = .75, inherit.aes = FALSE, show.legend = FALSE) +
-      ggplot2::scale_colour_manual(values = QUAD_FILL, guide = "none")
 
   if (show_directions) {
     dl <- direction_labels(m, xpc, ypc, xlim, ylim, ppt, dir_size * ggplot2::.pt, drop_quad)

@@ -47,7 +47,7 @@ patchwork, scales, grid, ragg**. Nothing to install.
   all 25 still fit at a 450px-wide plot. Below that, any name with no room is
   left off and the key says how many — zoom in or widen the window to bring
   them back.
-- **Body types**, silhouette size, labels, quadrants, hulls.
+- **Body types**, silhouette size, labels, quadrant shading, hulls.
 - **Light / dark toggle** in the header. It themes the entire app — chrome,
   cards, tables, both plots, and the downloaded PNG — not just the map.
 - Tabs for variance explained, the loadings table — which now names each
@@ -88,7 +88,7 @@ so **73.5%** of the variance is on the two axes you see.
 | `data/cars.csv` | 25 models x 8 attributes. Edit or extend it; nothing else needs changing. |
 | `R/silhouettes.R` | Body-type polygon shapes, `car_grob()`, and the `GeomCar` ggplot2 geom. |
 | `R/pca.R` | `fit_map()`, transforms, sign pinning, `axis_name()`. |
-| `R/layout.R` | Layout measurement, aspect fitting, label placement, quadrant tags, inset corner picking. |
+| `R/layout.R` | Layout measurement, aspect fitting, label and arrow placement, inset corner picking. |
 | `R/plot.R` | `build_map()`, `build_compass()`, `compose_map()`, `pm_bg()`, theming. |
 | `R/explain.R` | The How it works tab, generated from `CARS` / `ATTRS` so it cannot go stale. |
 | `app.R` | The Shiny app. |

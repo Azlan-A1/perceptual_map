@@ -16,9 +16,7 @@ cat("  PC1 =", axis_name(m$loadings, "PC1"), "\n")
 cat("  PC2 =", axis_name(m$loadings, "PC2"), "\n")
 
 DEV <- c(12.5, 9.5)
-p <- compose_map(m, car_pt = 40, dev_in = DEV,
-                 quads = c(tr = "BIG & POWERFUL", tl = "SMALL & QUICK",
-                           bl = "VALUE & ECONOMY", br = "SIZE & UTILITY"))
+p <- compose_map(m, car_pt = 40, dev_in = DEV)
 
 dir.create("outputs", showWarnings = FALSE)
 ggsave("outputs/map.png", p, width = DEV[1], height = DEV[2], dpi = 200,
@@ -48,9 +46,7 @@ save_pdf <- function(file, plot) {
 }
 save_pdf("outputs/map.pdf", p)
 
-p_dark <- compose_map(m, car_pt = 40, dev_in = DEV, dark = TRUE,
-                      quads = c(tr = "BIG & POWERFUL", tl = "SMALL & QUICK",
-                                bl = "VALUE & ECONOMY", br = "SIZE & UTILITY"))
+p_dark <- compose_map(m, car_pt = 40, dev_in = DEV, dark = TRUE)
 ggsave("outputs/map-dark.png", p_dark, width = DEV[1], height = DEV[2], dpi = 200,
        device = ragg::agg_png, limitsize = FALSE, bg = pm_bg(TRUE))
 

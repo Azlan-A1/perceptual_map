@@ -156,45 +156,6 @@ measure_layout <- function(skel, dev_in, texts = list()) {
   list(nonpanel = np, widths = w)
 }
 
-#' Place the quadrant tags in the inner corners, from measured widths.
-#'
-#' Two tags sharing a row wrap onto two lines ("LOW WEIGHT /" over "HIGH
-#' QUICKNESS") when they would not fit side by side. A tag that would sit on a
-#' car glyph is dropped: it is only an orientation aid, and the car is the data.
-#' Returns the text placement plus each tag's rectangle in data units, which
-#' build_map uses to drop any tag that would cover a car label.
-quad_tags <- function(quads, ixl, iyl, inner_pt, w1, w2, font_pt,
-                      drop_quad = NULL, cars = NULL, car_pt = 26, aspect = 2.4) {
-  keys <- setdiff(c("tl", "tr", "bl", "br"), drop_quad)
-  if (!length(keys)) return(NULL)
-  dpx <- diff(ixl) / inner_pt[1]; dpy <- diff(iyl) / inner_pt[2]   # data units per point
-  gap <- 4
-  wrap <- vapply(c(top = "t", bottom = "b"), function(r) {
-    ks <- keys[substr(keys, 1, 1) == r]
-    length(ks) > 0 && sum(w1[ks]) + 16 > inner_pt[1] - 2 * gap
-  }, TRUE)
-  out <- do.call(rbind, lapply(keys, function(k) {
-    top <- substr(k, 1, 1) == "t"; right <- substr(k, 2, 2) == "r"
-    wr  <- wrap[[if (top) "top" else "bottom"]]
-    w   <- if (wr) w2[[k]] else w1[[k]]
-    h   <- font_pt * (if (wr) 2.15 else 1.1)
-    x   <- if (right) ixl[2] - gap * dpx else ixl[1] + gap * dpx
-    y   <- if (top)   iyl[2] - gap * dpy else iyl[1] + gap * dpy
-    data.frame(key = k, x = x, y = y, hjust = as.numeric(right), vjust = as.numeric(top),
-               label = if (wr) sub(" / ", " /\n", quads[[k]], fixed = TRUE) else quads[[k]],
-               xmin = if (right) x - w * dpx else x, xmax = if (right) x else x + w * dpx,
-               ymin = if (top) y - h * dpy else y,   ymax = if (top) y else y + h * dpy)
-  }))
-  if (!is.null(cars) && nrow(cars)) {
-    gw <- car_pt / 2 * dpx; gh <- car_pt / aspect / 2 * dpy
-    on_car <- vapply(seq_len(nrow(out)), function(i) any(
-      cars$x + gw > out$xmin[i] & cars$x - gw < out$xmax[i] &
-      cars$y + gh > out$ymin[i] & cars$y - gh < out$ymax[i]), TRUE)
-    out <- out[!on_car, , drop = FALSE]
-  }
-  out
-}
-
 #' Slide arrow tip labels along their own ray until they are clear.
 #'
 #' The arrow tip is where the loading puts it, but its LABEL can sit anywhere
