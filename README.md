@@ -51,7 +51,8 @@ patchwork, scales, grid, ragg**. Nothing to install.
 - **Light / dark toggle** in the header. It themes the entire app — chrome,
   cards, tables, both plots, and the downloaded PNG — not just the map.
 - Tabs for variance explained, the loadings table, the raw data, and
-  **How it works**, an in-app explanation of the whole pipeline. *What PC1, PC2
+  **How it works**, an in-app explanation of the whole pipeline. The Data tab
+  downloads what it shows as CSV, body-type filter and all. *What PC1, PC2
   and the rest are* tables every component live — its share, running total,
   plain-English name and strongest specs — and flags any spec the default view
   hides (efficiency, which lives on PC3). *What left,

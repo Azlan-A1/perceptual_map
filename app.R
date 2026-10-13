@@ -75,7 +75,22 @@ ui <- page_sidebar(
     ),
     nav_panel("Variance", card_body(plotOutput("scree", height = "380px"))),
     nav_panel("Loadings", card_body(DTOutput("loadtab"), fillable = FALSE)),
-    nav_panel("Data",     card_body(DTOutput("datatab"), fillable = FALSE)),
+    nav_panel(
+      "Data",
+      card_body(
+        # A flex row rather than a grid: on a narrow pane the grid pushed the
+        # button past the card's edge, where it was clipped.
+        tags$div(
+          class = "d-flex justify-content-between align-items-start gap-3 mb-2 flex-wrap",
+          helpText(class = "mb-0", textOutput("datacount", inline = TRUE),
+                   " — the specs behind the map, exactly as the table shows them. ",
+                   "The body-type filter in the sidebar applies here too."),
+          downloadButton("dl_data", "Download CSV",
+                         class = "btn-sm btn-outline-secondary flex-shrink-0")
+        ),
+        DTOutput("datatab"), fillable = FALSE
+      )
+    ),
     nav_panel("How it works", card_body(explain_ui(CARS, ATTRS), fillable = FALSE))
   )
 )
@@ -227,8 +242,19 @@ server <- function(input, output, session) {
       formatStyle(num, backgroundColor = styleInterval(c(-0.5, 0.5), cells))
   })
 
+  # The table, the count and the download all read the same frame, so the file
+  # can never disagree with what is on screen.
+  data_shown <- reactive(pdat()[, c("model", "brand", "body", ATTRS$var)])
+
+  output$datacount <- renderText(sprintf("%d cars, %d specs each", nrow(data_shown()), length(ATTRS$var)))
+
+  output$dl_data <- downloadHandler(
+    filename = function() sprintf("perceptual-map-cars-%d.csv", nrow(data_shown())),
+    content = function(file) utils::write.csv(data_shown(), file, row.names = FALSE)
+  )
+
   output$datatab <- renderDT({
-    datatable(pdat()[, c("model","brand","body", ATTRS$var)], rownames = FALSE,
+    datatable(data_shown(), rownames = FALSE,
               style = "bootstrap5", class = "table table-sm",
               options = list(pageLength = 15, scrollX = TRUE))
   })
