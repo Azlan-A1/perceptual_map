@@ -195,6 +195,65 @@ quad_tags <- function(quads, ixl, iyl, inner_pt, w1, w2, font_pt,
   out
 }
 
+#' Slide arrow tip labels along their own ray until they are clear.
+#'
+#' The arrow tip is where the loading puts it, but its LABEL can sit anywhere
+#' along the ray. Strongest arrow first, each label steps outward until it
+#' clears the car glyphs and the labels already placed, then back down the
+#' shaft if outward is blocked or off-panel -- which is what happens to an
+#' arrow pointing straight at a car, as quickness does at the Corvette. If
+#' nothing clears it stays at the tip rather than wandering off down the ray.
+#' Near-parallel arrows (price and power, say) separate this way without
+#' moving either arrow.
+#'
+#' @param arr arrow frame with x, y (tip, data units) and r (strength)
+#' @param aw,ah label size in data units
+#' @param cx,cy car centres in data units; gw,gh glyph size in data units
+#' @param dpx,dpy data units per point, to keep the steps isotropic
+#' @return arr with lx, ly, hjust, vjust, xmin, xmax, ymin, ymax
+place_arrow_labels <- function(arr, aw, ah, cx, cy, gw, gh, xlim, ylim,
+                               dpx, dpy, base = 3, step = 3, max_out = 45) {
+  n <- nrow(arr)
+  vx <- arr$x / dpx; vy <- arr$y / dpy                       # ray in points
+  len <- sqrt(vx^2 + vy^2); len[len == 0] <- 1
+  ux <- vx / len; uy <- vy / len
+  hj <- ifelse(arr$x >= 0, 0, 1); vj <- ifelse(arr$y >= 0, 0, 1)
+  lx <- ly <- x0 <- x1 <- y0 <- y1 <- rep(NA_real_, n)
+  for (i in order(-arr$r)) {
+    inward <- -seq(step, max(step, min(max_out, 0.5 * len[i])), by = step)
+    found <- FALSE
+    for (t in c(seq(0, max_out, by = step), inward)) {
+      ax <- arr$x[i] + (base + t) * ux[i] * dpx
+      ay <- arr$y[i] + (base + t) * uy[i] * dpy
+      # The natural side first, then the other sides of the anchor -- a short
+      # arrow has little ray to slide along, so sideways is all that is left.
+      for (side in 1:4) {
+        h <- if (side %in% c(1, 3)) hj[i] else 1 - hj[i]
+        v <- if (side %in% c(1, 2)) vj[i] else 1 - vj[i]
+        bx0 <- ax - if (h == 1) aw[i] else 0; bx1 <- bx0 + aw[i]
+        by0 <- ay - if (v == 1) ah else 0;    by1 <- by0 + ah
+        if (bx0 < xlim[1] || bx1 > xlim[2] || by0 < ylim[1] || by1 > ylim[2]) next
+        on_car <- any(cx + gw / 2 > bx0 & cx - gw / 2 < bx1 & cy + gh / 2 > by0 & cy - gh / 2 < by1)
+        done <- which(!is.na(lx))
+        on_lab <- length(done) && any(x1[done] > bx0 & x0[done] < bx1 & y1[done] > by0 & y0[done] < by1)
+        if (!on_car && !on_lab) {
+          lx[i] <- ax; ly[i] <- ay; hj[i] <- h; vj[i] <- v
+          x0[i] <- bx0; x1[i] <- bx1; y0[i] <- by0; y1[i] <- by1; found <- TRUE; break
+        }
+      }
+      if (found) break
+    }
+    if (is.na(lx[i])) {                                      # nothing clear: stay at the tip
+      lx[i] <- arr$x[i] + base * ux[i] * dpx; ly[i] <- arr$y[i] + base * uy[i] * dpy
+      x0[i] <- lx[i] - if (hj[i] == 1) aw[i] else 0; x1[i] <- x0[i] + aw[i]
+      y0[i] <- ly[i] - if (vj[i] == 1) ah else 0;    y1[i] <- y0[i] + ah
+    }
+  }
+  arr$lx <- lx; arr$ly <- ly; arr$hjust <- hj; arr$vjust <- vj
+  arr$xmin <- x0; arr$xmax <- x1; arr$ymin <- y0; arr$ymax <- y1
+  arr
+}
+
 #' Widen limits by a band of `band_pt` points on each side.
 #' Widening a range makes every point worth more data units, so simply adding
 #' band_pt's current worth comes out short. Solved for the width AFTER widening.

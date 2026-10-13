@@ -32,6 +32,11 @@ patchwork, scales, grid, ragg**. Nothing to install.
   recomputed from the loadings whenever you change attributes or axes, drop
   their weakest words on a narrow window, and sit in a band of their own so car
   labels never land on them.
+- **Attribute arrows** are drawn on the map from the centre out, so cars and
+  specs can be read together — the Suburban lies along *cargo* and *weight*,
+  the Corvette along *quickness*. Arrows share one scale factor, so they are
+  comparable with each other but not with the cars' positions; their labels
+  slide along their own shaft to stay clear of the cars.
 - **Axis key** under the map defines the terms: *PC* is a principal component
   (an axis blending all the specs into one score) and the percentage is how
   much of the difference between cars that axis captures. It then names what

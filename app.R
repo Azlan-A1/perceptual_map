@@ -35,6 +35,7 @@ ui <- page_sidebar(
     sliderInput("car_pt", "Car size (pt)", min = 12, max = 70, value = 34, step = 2),
     hr(),
     checkboxInput("labels",   "Model labels",   TRUE),
+    checkboxInput("arrows",   "Attribute arrows", TRUE),
     checkboxInput("dirs",     "Direction labels", TRUE),
     checkboxInput("key",      "Axis key",         TRUE),
     checkboxInput("quads",    "Quadrant shading", TRUE),
@@ -133,6 +134,7 @@ server <- function(input, output, session) {
               car_pt = input$car_pt, dev_in = dev_in(),
               show_labels = input$labels, show_quadrants = input$quads,
               show_directions = input$dirs, show_key = input$key,
+              show_arrows = input$arrows,
               show_hulls = input$hulls, bodies = input$bodies,
               xlim = xl, ylim = yl, dark = dark())
   })

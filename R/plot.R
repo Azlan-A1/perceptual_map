@@ -86,8 +86,11 @@ direction_labels <- function(m, xpc, ypc, xlim, ylim, ppt, font_pt, drop_quad = 
 #' axes on screen measure. Wrapped to the device width, one axis per line when
 #' both will not fit on one.
 #' @return character vector of caption lines
+#' Characters that fit on one caption line at this device width.
+key_width <- function(dev_in, font_pt) max(40, floor(dev_in[1] * 72 * 0.94 / (font_pt * 0.50)))
+
 axis_key <- function(m, xpc, ypc, dev_in, font_pt) {
-  width <- max(40, floor(dev_in[1] * 72 * 0.94 / (font_pt * 0.50)))
+  width <- key_width(dev_in, font_pt)
   one <- function(pc, where) {
     v  <- m$ve[as.integer(sub("PC", "", pc))]
     th <- axis_theme(m$loadings, pc)
@@ -104,10 +107,29 @@ axis_key <- function(m, xpc, ypc, dev_in, font_pt) {
   unlist(lapply(c(what, axes), strwrap, width = width))
 }
 
+#' Attribute arrows for the biplot overlay, scaled into score space.
+#'
+#' Loadings are correlations, so they live inside a unit circle; scores run to
+#' several standard deviations. One shared factor scales every arrow -- the
+#' largest that keeps all of them on the panel -- so directions and RELATIVE
+#' lengths stay honest even though absolute length is arbitrary. That is the
+#' usual biplot compromise, and the caption says so.
+#'
+#' @return data.frame(var, x, y, r, k): tip position, the correlation's length
+#'   on these two axes (0..1), and the shared scale factor.
+arrow_rays <- function(m, xpc, ypc, xlim, ylim, frac = 0.82) {
+  L <- m$loadings; rx <- L[[xpc]]; ry <- L[[ypc]]
+  room <- function(r, lo, hi) ifelse(r > 0, hi / r, ifelse(r < 0, lo / r, Inf))
+  k <- frac * min(pmin(room(rx, xlim[1], xlim[2]), room(ry, ylim[1], ylim[2])), na.rm = TRUE)
+  if (!is.finite(k) || k <= 0) return(NULL)
+  data.frame(var = L$var, x = k * rx, y = k * ry, r = pmin(1, sqrt(rx^2 + ry^2)), k = k)
+}
+
 #' The main perceptual map.
 build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                       show_labels = TRUE, show_quadrants = TRUE, show_hulls = FALSE,
-                      show_directions = TRUE, show_key = TRUE, bodies = NULL, dev_in = c(11, 9),
+                      show_directions = TRUE, show_key = TRUE, show_arrows = TRUE,
+                      bodies = NULL, dev_in = c(11, 9),
                       xlim = NULL, ylim = NULL, dark = FALSE, quads = NULL,
                       title = "Perceptual Map of the Car Market", subtitle = NULL, drop_quad = NULL,
                       lab_size = 2.6, lab_size_min = 1.8) {
@@ -125,7 +147,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   mid <- if (dark) "#9AA0AA" else "grey55"
   qa  <- if (dark) 0.10 else 0.05
   if (is.null(quads)) quads <- auto_quads(m$loadings, xpc, ypc)
-  tag_size <- 2.8; dir_size <- 2.9                      # mm, ggplot's text unit
+  tag_size <- 2.8; dir_size <- 2.9; arr_size <- 2.5      # mm, ggplot's text unit
   # Label text shrinks only as far as it must: the ladder is tried largest
   # first and stops at the first size where every name fits.
   ladder <- unique(c(seq(lab_size, lab_size_min, by = -0.15), lab_size_min))
@@ -153,6 +175,8 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
       plot.caption = ggplot2::element_text(hjust = 0, size = key_pt, lineheight = 1.15,
                                            colour = if (dark) "#B4BAC4" else "grey30"),
       plot.caption.position = "plot"))
+  arrow_note <- if (show_arrows)
+    "Arrows are the attributes, pointing the way that spec rises; compare arrows with each other, not with the cars."
   hidden_note <- function(k, n) if (k > 0)
     sprintf("%d of %d car labels are hidden for space. Zoom in or widen the window to see them.", k, n)
 
@@ -170,6 +194,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   xlim0 <- xlim; ylim0 <- ylim; n_hidden <- 0L
   for (pass in 1:2) {
     key <- c(if (show_key) axis_key(m, xpc, ypc, dev_in, key_pt),
+             if (show_key && !is.null(arrow_note)) strwrap(arrow_note, width = key_width(dev_in, key_pt)),
              hidden_note(n_hidden, nrow(d)), note)
     chrome <- make_chrome(key)
     skel <- ggplot2::ggplot(d, ggplot2::aes(.x, .y, body = body, fill = body)) +
@@ -182,6 +207,8 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     ms <- measure_layout(skel, dev_in, c(
       list(tag  = list(label = quads,  fontsize = tag_size * ggplot2::.pt, fontface = 2),
            tag2 = list(label = wrap_q, fontsize = tag_size * ggplot2::.pt, fontface = 2)),
+      list(arrow = list(label = stats::setNames(m$loadings$var, m$loadings$var),
+                        fontsize = arr_size * ggplot2::.pt, fontface = 2)),
       stats::setNames(lapply(ladder, function(z)
         list(label = models, fontsize = z * ggplot2::.pt, fontface = 1)), paste0("car", seq_along(ladder)))))
     ms$widths$ladder <- ms$widths[paste0("car", seq_along(ladder))]
@@ -199,6 +226,18 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
     ixl <- xlim + c(bx, -bx); iyl <- ylim + c(by, -by)
     inner_pt <- ppt - 2 * band_pt
 
+    # Arrows are structural: they start at the origin and end where the
+    # loadings put them, so their tip labels are fixed and car labels work
+    # around them.
+    arr <- if (show_arrows) arrow_rays(m, xpc, ypc, ixl, iyl)
+    if (!is.null(arr) && nrow(arr)) {
+      dpx <- diff(ixl) / inner_pt[1]; dpy <- diff(iyl) / inner_pt[2]
+      arr <- place_arrow_labels(arr, aw = (ms$widths$arrow[arr$var] + 2) * dpx,
+                                ah = arr_size * ggplot2::.pt * 1.25 * dpy,
+                                cx = d$.x, cy = d$.y, gw = car_pt * dpx, gh = car_pt / 2.4 * dpy,
+                                xlim = ixl, ylim = iyl, dpx = dpx, dpy = dpy)
+    }
+
     vis <- d[d$.x >= xlim[1] & d$.x <= xlim[2] & d$.y >= ylim[1] & d$.y <= ylim[2], , drop = FALSE]
     tags <- if (show_quadrants)
       quad_tags(quads, ixl, iyl, inner_pt, ms$widths$tag, ms$widths$tag2, tag_size * ggplot2::.pt,
@@ -215,7 +254,8 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
         lab_pt <- ladder[li]
         L <- repel_labels(vis$.x, vis$.y, vis$model, ixl, iyl, car_pt = car_pt,
                           font_pt = lab_pt * ggplot2::.pt, ppt = inner_pt,
-                          label_w = unname(ms$widths$ladder[[li]][vis$model]))
+                          label_w = unname(ms$widths$ladder[[li]][vis$model]),
+                          obstacles = if (!is.null(arr) && nrow(arr)) arr)
         if (all(L$placed)) break
       }
       lab <- vis; lab$lx <- L$lx; lab$ly <- L$ly
@@ -223,9 +263,10 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
       if (!is.null(tags) && nrow(tags) && nrow(lab)) {
         hw <- (ms$widths$ladder[[li]][lab$model] * 1.05 + 6) / 2 * diff(ixl) / inner_pt[1]
         hh <- lab_pt * ggplot2::.pt * 1.55 / 2 * diff(iyl) / inner_pt[2]
+        bx0 <- c(lab$lx - hw, if (!is.null(arr)) arr$xmin); bx1 <- c(lab$lx + hw, if (!is.null(arr)) arr$xmax)
+        by0 <- c(lab$ly - hh, if (!is.null(arr)) arr$ymin); by1 <- c(lab$ly + hh, if (!is.null(arr)) arr$ymax)
         covers <- vapply(seq_len(nrow(tags)), function(k) any(
-          lab$lx + hw > tags$xmin[k] & lab$lx - hw < tags$xmax[k] &
-          lab$ly + hh > tags$ymin[k] & lab$ly - hh < tags$ymax[k]), TRUE)
+          bx1 > tags$xmin[k] & bx0 < tags$xmax[k] & by1 > tags$ymin[k] & by0 < tags$ymax[k]), TRUE)
         tags <- tags[!covers, , drop = FALSE]
       }
     }
@@ -265,6 +306,15 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
       ggplot2::geom_vline(xintercept = 0, colour = mid, linewidth = .35)
   }
 
+  if (!is.null(arr) && nrow(arr)) {
+    ink <- if (dark) "#E6E8EC" else "grey15"
+    p <- p + ggplot2::geom_segment(
+      data = arr, ggplot2::aes(0, 0, xend = x, yend = y, alpha = r),
+      colour = ink, linewidth = .4, arrow = grid::arrow(length = grid::unit(4.5, "pt"), type = "closed"),
+      arrow.fill = ink, inherit.aes = FALSE, show.legend = FALSE) +
+      ggplot2::scale_alpha_continuous(range = c(.30, .85), guide = "none")
+  }
+
   if (show_hulls) {
     h <- hull_rows(d, ".x", ".y", "body")
     if (!is.null(h) && nrow(h))
@@ -286,6 +336,11 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
                                  size = lab_pt, colour = fg, linewidth = 0,
                                  label.padding = grid::unit(1, "pt"),
                                  fill = scales::alpha(pm_bg(dark), .80))
+
+  if (!is.null(arr) && nrow(arr))
+    p <- p + ggplot2::geom_text(data = arr, ggplot2::aes(lx, ly, label = var, hjust = hjust, vjust = vjust),
+                                size = arr_size, fontface = "bold", colour = if (dark) "#E6E8EC" else "grey15",
+                                alpha = .9, inherit.aes = FALSE)
 
   if (!is.null(tags) && nrow(tags))
     p <- p + ggplot2::geom_text(data = tags, ggplot2::aes(x, y, label = label, hjust = hjust,
