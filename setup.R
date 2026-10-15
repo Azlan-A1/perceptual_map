@@ -1,8 +1,9 @@
 # ---------------------------------------------------------------------------
 # Checks what this project needs. Reports only -- it never installs anything.
 # ---------------------------------------------------------------------------
-required <- c("ggplot2", "shiny", "bslib", "DT", "patchwork", "scales", "grid", "ragg")
-optional <- c("ggrepel")   # nicer label placement than the built-in repel
+required <- c("ggplot2", "shiny", "bslib", "patchwork", "scales", "grid")
+optional <- c("ragg",    # sharper text in the PNG exports; the stock device is used without it
+              "DT")      # only needed for the table tabs
 
 have <- function(p) requireNamespace(p, quietly = TRUE)
 
@@ -29,3 +30,11 @@ if (length(missing)) {
 
 if (getRversion() < "4.1.0")
   cat("\nNote: this project uses the native |> pipe, which needs R >= 4.1.\n")
+
+if (.Platform$OS.type == "windows" && getRversion() < "4.2.0")
+  cat("\nNote: on Windows, R >= 4.2 renders the plot's dashes and arrows correctly.\n",
+      "     Older builds show them as <U+2014>; everything else works.\n", sep = "")
+
+if (!capabilities("cairo"))
+  cat("\nNote: cairo is unavailable, so outputs/map.pdf falls back to the base PDF\n",
+      "     device and substitutes ASCII for a few glyphs. PNG exports are unaffected.\n", sep = "")

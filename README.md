@@ -16,8 +16,23 @@ source("run_static.R")   # static map -> Plots pane + outputs/map.png|pdf
 shiny::runApp()          # the interactive app (or click "Run App")
 ```
 
-Everything runs on packages you already have: **ggplot2, shiny, bslib, DT,
-patchwork, scales, grid, ragg**. Nothing to install.
+Everything runs on packages you already have: **ggplot2, shiny, bslib,
+patchwork, scales, grid**, with **ragg** and **DT** optional. Nothing to install.
+
+### Windows, macOS or Linux
+
+The project is plain R with relative paths, so it runs the same on all three.
+Two platform details are handled rather than assumed:
+
+- **Text encoding.** Every R source file is pure ASCII; the dashes, arrows and
+  middle dots in the plot are `\uXXXX` escapes, so they survive whatever
+  encoding the machine reads the files with. On Windows they render correctly
+  from R 4.2, which is where UTF-8 became the native encoding; `setup.R` says so
+  if you are on an older build.
+- **Devices.** `ragg` is used for PNG export when installed and the stock device
+  otherwise. The PDF export prefers `cairo_pdf` and falls back to the base
+  device with a message that names the right fix for your platform (cairo ships
+  with R on Windows; macOS needs XQuartz).
 
 ## The app
 

@@ -5,7 +5,7 @@
 suppressPackageStartupMessages({
   library(ggplot2); library(grid); library(patchwork); library(scales)
 })
-for (f in c("silhouettes", "pca", "layout", "plot")) source(file.path("R", paste0(f, ".R")))
+for (f in c("silhouettes", "pca", "layout", "plot")) source(file.path("R", paste0(f, ".R")), encoding = "UTF-8")
 
 cars <- read.csv("data/cars.csv", stringsAsFactors = FALSE)
 m    <- fit_map(cars)
@@ -20,7 +20,18 @@ p <- compose_map(m, car_pt = 40, dev_in = DEV)
 
 dir.create("outputs", showWarnings = FALSE)
 ggsave("outputs/map.png", p, width = DEV[1], height = DEV[2], dpi = 200,
-       device = ragg::agg_png, limitsize = FALSE, bg = pm_bg(FALSE))
+       device = pm_png(), limitsize = FALSE, bg = pm_bg(FALSE))
+#' What to tell the user when cairo is unavailable. Only macOS needs XQuartz;
+#' Windows and Linux R builds normally ship with cairo already.
+pdf_hint <- function(sysname = Sys.info()[["sysname"]]) {
+  base <- paste("note: cairo unavailable - PDF written with the base device, which",
+                "substitutes ASCII for the em-dash and arrow glyphs.")
+  paste(base, switch(sysname,
+    Darwin  = "Install XQuartz (https://www.xquartz.org) if you need exact PDF typography.",
+    Windows = "This is unusual on Windows; the PNG exports are unaffected.",
+    "Install the cairo development libraries if you need exact PDF typography."))
+}
+
 # cairo_pdf gives proper UTF-8 text but needs XQuartz on macOS. capabilities()
 # can report TRUE while the DLL still fails to load at draw time, and that
 # failure is a WARNING, not an error -- so verify the file actually landed
@@ -36,9 +47,7 @@ save_pdf <- function(file, plot) {
   }
   if (try_dev(grDevices::cairo_pdf)) return(invisible(TRUE))
   if (try_dev(NULL)) {
-    message("note: cairo unavailable - PDF written with the base device, which ",
-            "substitutes ASCII for the em-dash and arrow glyphs. Install XQuartz ",
-            "(https://www.xquartz.org) if you need exact PDF typography.")
+    message(pdf_hint())
     return(invisible(TRUE))
   }
   warning("could not write ", file)
@@ -48,7 +57,7 @@ save_pdf("outputs/map.pdf", p)
 
 p_dark <- compose_map(m, car_pt = 40, dev_in = DEV, dark = TRUE)
 ggsave("outputs/map-dark.png", p_dark, width = DEV[1], height = DEV[2], dpi = 200,
-       device = ragg::agg_png, limitsize = FALSE, bg = pm_bg(TRUE))
+       device = pm_png(), limitsize = FALSE, bg = pm_bg(TRUE))
 
 cat("\nWrote outputs/map.png, outputs/map.pdf, outputs/map-dark.png\n")
 if (interactive()) print(p)   # <- Plots pane

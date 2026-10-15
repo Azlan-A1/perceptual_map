@@ -5,7 +5,7 @@ suppressPackageStartupMessages({
   library(shiny); library(bslib); library(ggplot2); library(grid)
   library(patchwork); library(scales); library(DT)
 })
-for (f in c("silhouettes", "pca", "layout", "plot", "explain")) source(file.path("R", paste0(f, ".R")))
+for (f in c("silhouettes", "pca", "layout", "plot", "explain")) source(file.path("R", paste0(f, ".R")), encoding = "UTF-8")
 
 CARS <- read.csv("data/cars.csv", stringsAsFactors = FALSE)
 # Only offer body types the data actually has, in the canonical order, so
@@ -102,7 +102,7 @@ ui <- page_sidebar(
         tags$div(
           class = "d-flex justify-content-between align-items-start gap-3 mb-2 flex-wrap",
           helpText(class = "mb-0", textOutput("datacount", inline = TRUE),
-                   " — the specs behind the map, exactly as the table shows them. ",
+                   " \u2014 the specs behind the map, exactly as the table shows them. ",
                    "The body-type filter in the sidebar applies here too."),
           downloadButton("dl_data", "Download CSV",
                          class = "btn-sm btn-outline-secondary flex-shrink-0")
@@ -223,8 +223,8 @@ server <- function(input, output, session) {
     tags$div(class = "note",
       tags$span(class = "h", "Your current fit:"), " ",
       sprintf(paste0("%d attributes across %d cars. %s carries %.1f%% of the variance and reads as ",
-                     "“%s”; %s carries %.1f%% and reads as “%s”. That puts %.1f%% of ",
-                     "everything the specs contain on screen — the other %.1f%% sits in components ",
+                     "\u201c%s\u201d; %s carries %.1f%% and reads as \u201c%s\u201d. That puts %.1f%% of ",
+                     "everything the specs contain on screen \u2014 the other %.1f%% sits in components ",
                      "you are not currently looking at."),
               length(m$vars), nrow(pdat()), xpc(), vx, axis_name(m$loadings, xpc()),
               ypc(), vy, axis_name(m$loadings, ypc()), vx + vy, 100 - (vx + vy)))
@@ -286,7 +286,7 @@ server <- function(input, output, session) {
     content = function(file) {
       # A downloaded file has no card behind it, so it needs a real fill.
       ggsave(file, build(), width = 12.5, height = 9.5, dpi = 200,
-             device = ragg::agg_png, limitsize = FALSE, bg = pm_bg(dark()))
+             device = pm_png(), limitsize = FALSE, bg = pm_bg(dark()))
     }
   )
 }

@@ -2,6 +2,11 @@
 # Plot construction: the map, the loadings compass, and the two composed.
 # ---------------------------------------------------------------------------
 
+#' The PNG device to render with. ragg gives better text, but it is not
+#' always installed -- NULL lets ggsave pick the stock device by extension,
+#' which keeps the project working on a bare R install, Windows included.
+pm_png <- function() if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else NULL
+
 #' The single source of truth for the two page backgrounds. Anything that fills
 #' a device or a label must use this, or light/dark drift apart.
 pm_bg <- function(dark = FALSE) if (dark) "#16181D" else "#FFFFFF"
@@ -146,7 +151,7 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   vx <- m$ve[as.integer(sub("PC", "", xpc))]
   vy <- m$ve[as.integer(sub("PC", "", ypc))]
   if (is.null(subtitle))
-    subtitle <- sprintf("PCA on %d attributes — %d models, %.1f%% of variance on these two axes",
+    subtitle <- sprintf("PCA on %d attributes \u2014 %d models, %.1f%% of variance on these two axes",
                         length(m$vars), nrow(d), vx + vy)
   note   <- "Silhouettes are drawn in R. Specs are approximate, curated for illustration."
   key_pt <- 11 * 0.78
@@ -155,8 +160,8 @@ build_map <- function(m, xpc = "PC1", ypc = "PC2", car_pt = 26,
   make_chrome <- function(key) list(
     ggplot2::labs(
       title = title, subtitle = subtitle,
-      x = sprintf("%s (%.1f%%)  —  %s →", xpc, vx, axis_name(m$loadings, xpc)),
-      y = sprintf("%s (%.1f%%)  —  %s →", ypc, vy, axis_name(m$loadings, ypc)),
+      x = sprintf("%s (%.1f%%)  \u2014  %s \u2192", xpc, vx, axis_name(m$loadings, xpc)),
+      y = sprintf("%s (%.1f%%)  \u2014  %s \u2192", ypc, vy, axis_name(m$loadings, ypc)),
       caption = paste(key, collapse = "\n")),
     pm_theme(dark),
     # A key reads left to right like prose; the bare note keeps its old spot.
